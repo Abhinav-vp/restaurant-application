@@ -67,6 +67,22 @@ export default function MenuPage() {
     };
 
     loadProducts();
+
+    const onProductsUpdated = () => {
+      loadProducts();
+    };
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "orderflow_products") loadProducts();
+    };
+
+    window.addEventListener("orderflow_products_updated", onProductsUpdated);
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      window.removeEventListener("orderflow_products_updated", onProductsUpdated);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   const addToCart = (dish: MenuItem) => {
@@ -155,7 +171,14 @@ export default function MenuPage() {
               <div key={dish.id} className="glass rounded-2xl p-4 flex flex-col">
               <div className="h-40 w-full relative rounded-lg overflow-hidden mb-4 bg-slate-900">
                 {dish.image ? (
-                  <Image src={dish.image} alt={dish.name} fill className="object-cover" />
+                  // Use Next/Image for local static assets, fallback to native <img> for external/admin URLs
+                  dish.image.startsWith("/") ? (
+                    <Image src={dish.image} alt={dish.name} fill className="object-cover" />
+                  ) : (
+                    // plain img avoids Next host allowlist issues for admin-provided URLs
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={dish.image} alt={dish.name} className="w-full h-full object-cover" />
+                  )
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-500">No image</div>
                 )}

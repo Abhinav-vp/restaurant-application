@@ -285,11 +285,13 @@ export default function DashboardClient({
         const updated = products.map(p => p.id === editingProductId ? { ...p, ...payload } : p);
         setProducts(updated);
         localStorage.setItem("orderflow_products", JSON.stringify(updated));
+        try { window.dispatchEvent(new Event('orderflow_products_updated')); } catch (e) {}
       } else {
         const newProd: Product = { id: Math.random().toString(36).slice(2, 9), ...payload, created_at: new Date().toISOString() } as Product;
         const updated = [newProd, ...products];
         setProducts(updated);
         localStorage.setItem("orderflow_products", JSON.stringify(updated));
+        try { window.dispatchEvent(new Event('orderflow_products_updated')); } catch (e) {}
       }
       setIsProdModalOpen(false);
       resetProductForm();
@@ -328,6 +330,7 @@ export default function DashboardClient({
       const updated = products.filter(p => p.id !== productId);
       setProducts(updated);
       localStorage.setItem("orderflow_products", JSON.stringify(updated));
+      try { window.dispatchEvent(new Event('orderflow_products_updated')); } catch (e) {}
       return;
     }
 
