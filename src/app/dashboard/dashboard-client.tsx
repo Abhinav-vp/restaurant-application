@@ -357,7 +357,7 @@ export default function DashboardClient({
     id: string;
     name: string;
     price: number;
-    image?: string;
+    image?: string | null;
     created_at?: string;
   }
 
@@ -408,6 +408,60 @@ export default function DashboardClient({
           <span className="text-xl font-bold text-white">
             Order<span className="text-primary-400">Flow</span>
           </span>
+        </div>
+
+        {/* Products Management Section */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-white">Products</h3>
+            <div className="flex items-center gap-3">
+              <button onClick={() => { resetProductForm(); setIsProdModalOpen(true); }} className="btn-primary text-sm">Add Product</button>
+            </div>
+          </div>
+
+          <div className="glass rounded-2xl p-4">
+            {prodLoading ? (
+              <div className="py-12 text-center text-surface-400">Loading products...</div>
+            ) : products.length === 0 ? (
+              <div className="py-12 text-center text-surface-400">No products yet. Create one to get started.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-surface-800 text-xs font-semibold uppercase tracking-wider text-surface-400 bg-surface-900/35">
+                      <th className="py-3 px-4">Image</th>
+                      <th className="py-3 px-4">Name</th>
+                      <th className="py-3 px-4">Price</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-800/50">
+                    {products.map((p) => (
+                      <tr key={p.id} className="group hover:bg-surface-800/20 transition-smooth">
+                        <td className="py-3 px-4 w-24">
+                          {p.image ? (
+                            <img src={p.image} alt={p.name} className="w-20 h-12 object-cover rounded-md" />
+                          ) : (
+                            <div className="w-20 h-12 bg-surface-800 rounded-md flex items-center justify-center text-xs text-surface-500">No Image</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-white">{p.name}</div>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-white">${p.price.toFixed(2)}</td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => handleEditProduct(p)} className="p-2 text-surface-400 hover:text-white rounded-lg">Edit</button>
+                            <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-danger hover:bg-danger/10 rounded-lg">Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="hidden md:flex flex-col text-right">
@@ -547,60 +601,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-project-anon-key`}
                   {stat.icon}
                 </div>
               </div>
-
-                {/* Products Management Section */}
-                <div className="mt-10">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-white">Products</h3>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => { resetProductForm(); setIsProdModalOpen(true); }} className="btn-primary text-sm">Add Product</button>
-                    </div>
-                  </div>
-
-                  <div className="glass rounded-2xl p-4">
-                    {prodLoading ? (
-                      <div className="py-12 text-center text-surface-400">Loading products...</div>
-                    ) : products.length === 0 ? (
-                      <div className="py-12 text-center text-surface-400">No products yet. Create one to get started.</div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="border-b border-surface-800 text-xs font-semibold uppercase tracking-wider text-surface-400 bg-surface-900/35">
-                              <th className="py-3 px-4">Image</th>
-                              <th className="py-3 px-4">Name</th>
-                              <th className="py-3 px-4">Price</th>
-                              <th className="py-3 px-4 text-right">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-surface-800/50">
-                            {products.map((p) => (
-                              <tr key={p.id} className="group hover:bg-surface-800/20 transition-smooth">
-                                <td className="py-3 px-4 w-24">
-                                  {p.image ? (
-                                    <img src={p.image} alt={p.name} className="w-20 h-12 object-cover rounded-md" />
-                                  ) : (
-                                    <div className="w-20 h-12 bg-surface-800 rounded-md flex items-center justify-center text-xs text-surface-500">No Image</div>
-                                  )}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <div className="font-semibold text-white">{p.name}</div>
-                                </td>
-                                <td className="py-3 px-4 font-bold text-white">${p.price.toFixed(2)}</td>
-                                <td className="py-3 px-4 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => handleEditProduct(p)} className="p-2 text-surface-400 hover:text-white rounded-lg">Edit</button>
-                                    <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-danger hover:bg-danger/10 rounded-lg">Delete</button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
               <h3 className="text-2xl md:text-3xl font-extrabold text-white mb-1">{stat.value}</h3>
               <p className="text-xs text-surface-500">{stat.change}</p>
             </div>
