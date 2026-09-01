@@ -11,9 +11,22 @@ export default async function DashboardPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      redirect("/");
+      // Allow a dev-only bypass using the `demo-user` cookie when no Supabase session
+      // This helps local testing when env keys exist but no auth session is present.
+      if (process.env.NODE_ENV !== "production") {
+        const cookieStore = await cookies();
+        const demoUserCookie = cookieStore.get("demo-user");
+        if (demoUserCookie) {
+          userEmail = demoUserCookie.value || "";
+        } else {
+          redirect("/");
+        }
+      } else {
+        redirect("/");
+      }
+    } else {
+      userEmail = user.email || "";
     }
-    userEmail = user.email || "";
   } else {
     const cookieStore = await cookies();
     const demoUser = cookieStore.get("demo-user");
