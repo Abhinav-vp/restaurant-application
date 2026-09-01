@@ -721,9 +721,7 @@ export default function Home() {
               >
                 Explore More Dishes
               </button>
-              <Link href="/dashboard" className="text-slate-450 hover:text-white text-xs font-semibold underline mt-2">
-                Log into Admin Dashboard to track this order
-              </Link>
+              
             </div>
           </div>
         </div>

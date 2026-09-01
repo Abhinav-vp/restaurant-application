@@ -13,8 +13,8 @@ export async function login(formData: FormData) {
     // Demo mode: Set a demo cookie so we can mock/simulate an active user session in middleware or local state
     const cookieStore = await cookies()
     cookieStore.set('demo-user', email, { maxAge: 60 * 60 * 24 })
-    revalidatePath('/dashboard', 'layout')
-    redirect('/dashboard')
+    revalidatePath('/', 'layout')
+    redirect('/')
   }
 
   const supabase = await createClient()
@@ -28,8 +28,8 @@ export async function login(formData: FormData) {
     return { error: error.message }
   }
 
-  revalidatePath('/dashboard', 'layout')
-  redirect('/dashboard')
+  revalidatePath('/', 'layout')
+  redirect('/')
 }
 
 export async function signup(formData: FormData) {
@@ -39,8 +39,8 @@ export async function signup(formData: FormData) {
   if (!isSupabaseConfigured()) {
     const cookieStore = await cookies()
     cookieStore.set('demo-user', email, { maxAge: 60 * 60 * 24 })
-    revalidatePath('/dashboard', 'layout')
-    redirect('/dashboard')
+    revalidatePath('/', 'layout')
+    redirect('/')
   }
 
   const supabase = await createClient()
@@ -54,8 +54,8 @@ export async function signup(formData: FormData) {
     return { error: error.message }
   }
 
-  revalidatePath('/dashboard', 'layout')
-  redirect('/dashboard')
+  revalidatePath('/', 'layout')
+  redirect('/')
 }
 
 export async function signout() {
