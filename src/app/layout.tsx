@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AdminButton from "@/components/AdminButton";
 
 export const metadata: Metadata = {
   title: "OrderFlow — Smart Order Management",
@@ -22,7 +23,8 @@ export default function RootLayout({
         />
       </head>
       <body className="gradient-bg min-h-screen">
-        {children}
+           {children}
+           <AdminButton />
       </body>
     </html>
   );
