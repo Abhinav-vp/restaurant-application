@@ -33,8 +33,6 @@ export default function Home() {
 
   const supabase = createClient();
 
-  const [isAdmin, setIsAdmin] = useState(false);
-
   // Load custom reviews from localStorage if available
   useEffect(() => {
     const savedReviews = localStorage.getItem("abrama_custom_reviews");
@@ -43,24 +41,8 @@ export default function Home() {
     }
   }, []);
 
-  // Determine admin status from NEXT_PUBLIC_ADMIN_EMAILS (comma-separated)
-  useEffect(() => {
-    let mounted = true;
-    async function checkAdmin() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const adminListRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "");
-        const adminList = adminListRaw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-        if (mounted && user?.email) {
-          setIsAdmin(adminList.includes(user.email.toLowerCase()));
-        }
-      } catch (err) {
-        // silently ignore
-      }
-    }
-    checkAdmin();
-    return () => { mounted = false };
-  }, [supabase]);
+  // No admin UI in this build — skip admin checks
+  useEffect(() => {}, [supabase]);
 
   const handleAddToCart = (dish: MenuItem) => {
     const existing = cart.find(item => item.dish.id === dish.id);
@@ -207,14 +189,7 @@ export default function Home() {
           <a href="#reviews" className="hover:text-amber-400 transition-smooth">Reviews</a>
           <a href="#location" className="hover:text-amber-400 transition-smooth">Location</a>
           <span className="w-[1px] h-4 bg-slate-700"></span>
-          {isAdmin && (
-            <Link href="/dashboard" className="text-slate-400 hover:text-white flex items-center gap-1.5 transition-smooth">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Manager Panel
-            </Link>
-          )}
+          
         </div>
 
         <div className="flex items-center gap-3">
