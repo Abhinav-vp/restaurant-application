@@ -8,12 +8,66 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function MenuPage() {
   const [cart, setCart] = useState<{ dish: MenuItem; quantity: number }[]>([]);
+  const [products, setProducts] = useState<MenuItem[]>(MENU_ITEMS);
+  const [prodLoading, setProdLoading] = useState(true);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
 
   const supabase = createClient();
+
+  React.useEffect(() => {
+    const loadProducts = async () => {
+      setProdLoading(true);
+      // LocalStorage override (admin created products in dashboard)
+      try {
+        const local = localStorage.getItem("orderflow_products");
+        if (local) {
+          const parsed = JSON.parse(local);
+          // map to MenuItem shape
+          const mapped: MenuItem[] = parsed.map((p: any, idx: number) => ({
+            id: p.id || `local-${idx}`,
+            name: p.name || "Untitled",
+            category: (p.category as MenuItem["category"]) || "mains",
+            price: Number(p.price) || 0,
+            description: p.description || "",
+            image: p.image || undefined,
+          }));
+          setProducts(mapped);
+          setProdLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Failed to read local products", err);
+      }
+
+      // Try Supabase products table if configured
+      try {
+        const { data, error } = await supabase.from("products").select("*");
+        if (error || !data) {
+          setProducts(MENU_ITEMS);
+        } else {
+          const mapped: MenuItem[] = data.map((p: any, idx: number) => ({
+            id: p.id || `prod-${idx}`,
+            name: p.name || "Untitled",
+            category: (p.category as MenuItem["category"]) || "mains",
+            price: Number(p.price) || 0,
+            description: p.description || "",
+            image: p.image || undefined,
+          }));
+          setProducts(mapped);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch products from Supabase", err);
+        setProducts(MENU_ITEMS);
+      } finally {
+        setProdLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, []);
 
   const addToCart = (dish: MenuItem) => {
     const existing = cart.find((c) => c.dish.id === dish.id);
@@ -94,8 +148,11 @@ export default function MenuPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {MENU_ITEMS.map((dish) => (
-            <div key={dish.id} className="glass rounded-2xl p-4 flex flex-col">
+          {prodLoading ? (
+            <div className="col-span-3 text-center text-slate-400">Loading products...</div>
+          ) : (
+            products.map((dish) => (
+              <div key={dish.id} className="glass rounded-2xl p-4 flex flex-col">
               <div className="h-40 w-full relative rounded-lg overflow-hidden mb-4 bg-slate-900">
                 {dish.image ? (
                   <Image src={dish.image} alt={dish.name} fill className="object-cover" />
@@ -112,7 +169,8 @@ export default function MenuPage() {
                 <button onClick={() => addToCart(dish)} className="btn-secondary px-3 py-2">Add</button>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Cart drawer */}
