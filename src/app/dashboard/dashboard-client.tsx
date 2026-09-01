@@ -51,9 +51,11 @@ const INITIAL_MOCK_ORDERS: Order[] = [
 export default function DashboardClient({
   userEmail,
   isConfigured,
+  demoBypass = false,
 }: {
   userEmail: string;
   isConfigured: boolean;
+  demoBypass?: boolean;
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -400,6 +402,11 @@ export default function DashboardClient({
 
   return (
     <div className="min-h-screen flex flex-col pb-12">
+      {demoBypass && (
+        <div className="w-full bg-yellow-600/10 border-b border-yellow-600/20 text-yellow-300 py-3 text-center">
+          Running with demo bypass. Admin access granted via `demo-user` cookie for {userEmail}.
+        </div>
+      )}
       {/* Navbar */}
       <nav className="flex items-center justify-between px-8 py-4 glass-light sticky top-0 z-10 backdrop-blur-md">
         <div className="flex items-center gap-3">

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 export default async function DashboardPage() {
   const configured = isSupabaseConfigured();
   let userEmail = "";
+  let demoBypass = false;
 
   if (configured) {
     const supabase = await createClient();
@@ -18,6 +19,7 @@ export default async function DashboardPage() {
         const demoUserCookie = cookieStore.get("demo-user");
         if (demoUserCookie) {
           userEmail = demoUserCookie.value || "";
+          demoBypass = true;
         } else {
           redirect("/");
         }
@@ -39,7 +41,8 @@ export default async function DashboardPage() {
   return (
     <DashboardClient 
       userEmail={userEmail} 
-      isConfigured={configured} 
+      isConfigured={configured}
+      demoBypass={demoBypass}
     />
   );
 }

@@ -13,10 +13,25 @@ export default function AdminButton() {
     (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user || !user.email) return;
         const adminListRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "");
         const adminList = adminListRaw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-        if (mounted) setIsAdmin(adminList.includes(user.email.toLowerCase()));
+
+        if (user && user.email) {
+          if (mounted) setIsAdmin(adminList.includes(user.email.toLowerCase()));
+          return;
+        }
+
+        // No supabase user — fallback: check demo-user cookie for dev mode
+        try {
+          const match = document.cookie.split(';').map(s => s.trim()).find(c => c.startsWith('demo-user='));
+          if (match) {
+            const demoEmail = decodeURIComponent(match.split('=')[1] || '').toLowerCase();
+            if (mounted && demoEmail) setIsAdmin(adminList.includes(demoEmail));
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
       } catch (err) {
         // ignore
       }
