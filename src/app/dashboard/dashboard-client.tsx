@@ -77,7 +77,42 @@ export default function DashboardClient({
 
   useEffect(() => {
     fetchOrders();
+    fetchProducts();
   }, []);
+
+  const fetchProducts = async () => {
+    setProdLoading(true);
+    if (!isConfigured) {
+      const local = localStorage.getItem("orderflow_products");
+      if (local) {
+        setProducts(JSON.parse(local));
+      } else {
+        localStorage.setItem("orderflow_products", JSON.stringify(INITIAL_MOCK_PRODUCTS));
+        setProducts(INITIAL_MOCK_PRODUCTS);
+      }
+      setProdLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Supabase fetch products error:", error);
+        const local = localStorage.getItem("orderflow_products") || "[]";
+        setProducts(JSON.parse(local));
+      } else {
+        setProducts(data || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setProdLoading(false);
+    }
+  };
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -216,6 +251,99 @@ export default function DashboardClient({
     }
   };
 
+  // --- Product handlers ---
+  const resetProductForm = () => {
+    setEditingProductId(null);
+    setProdName("");
+    setProdPrice(9.99);
+    setProdImage("");
+    setProdActionError(null);
+    setProdSubmitting(false);
+  };
+
+  const handleEditProduct = (p: Product) => {
+    setEditingProductId(p.id);
+    setProdName(p.name);
+    setProdPrice(p.price);
+    setProdImage(p.image || "");
+    setIsProdModalOpen(true);
+  };
+
+  const handleCreateOrUpdateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProdSubmitting(true);
+    setProdActionError(null);
+
+    const payload = {
+      name: prodName,
+      price: Number(prodPrice),
+      image: prodImage || null,
+    };
+
+    if (!isConfigured) {
+      if (editingProductId) {
+        const updated = products.map(p => p.id === editingProductId ? { ...p, ...payload } : p);
+        setProducts(updated);
+        localStorage.setItem("orderflow_products", JSON.stringify(updated));
+      } else {
+        const newProd: Product = { id: Math.random().toString(36).slice(2, 9), ...payload, created_at: new Date().toISOString() } as Product;
+        const updated = [newProd, ...products];
+        setProducts(updated);
+        localStorage.setItem("orderflow_products", JSON.stringify(updated));
+      }
+      setIsProdModalOpen(false);
+      resetProductForm();
+      return setProdSubmitting(false);
+    }
+
+    try {
+      if (editingProductId) {
+        const { error } = await supabase
+          .from("products")
+          .update(payload)
+          .eq("id", editingProductId);
+        if (error) throw error;
+        await fetchProducts();
+      } else {
+        const { data, error } = await supabase
+          .from("products")
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        setProducts([data, ...products]);
+      }
+      setIsProdModalOpen(false);
+      resetProductForm();
+    } catch (err: any) {
+      setProdActionError(err.message || "Failed to save product");
+    } finally {
+      setProdSubmitting(false);
+    }
+  };
+
+  const handleDeleteProduct = async (productId: string) => {
+    if (!confirm("Delete this product?")) return;
+    if (!isConfigured) {
+      const updated = products.filter(p => p.id !== productId);
+      setProducts(updated);
+      localStorage.setItem("orderflow_products", JSON.stringify(updated));
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", productId);
+      if (error) throw error;
+      setProducts(products.filter(p => p.id !== productId));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete product in Database");
+    }
+  };
+
   const resetForm = () => {
     setCustomerName("");
     setCustomerEmail("");
@@ -223,6 +351,30 @@ export default function DashboardClient({
     setQuantity(1);
     setPrice(9.99);
   };
+
+  // --- Products (Admin) ---
+  interface Product {
+    id: string;
+    name: string;
+    price: number;
+    image?: string;
+    created_at?: string;
+  }
+
+  const INITIAL_MOCK_PRODUCTS: Product[] = [
+    { id: "p1", name: "Sample Pizza", price: 9.99, image: "", created_at: new Date().toISOString() },
+    { id: "p2", name: "Sample Burger", price: 6.99, image: "", created_at: new Date().toISOString() },
+  ];
+
+  const [products, setProducts] = useState<Product[]>([]);
+  const [prodLoading, setProdLoading] = useState(true);
+  const [isProdModalOpen, setIsProdModalOpen] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [prodName, setProdName] = useState("");
+  const [prodPrice, setProdPrice] = useState(9.99);
+  const [prodImage, setProdImage] = useState("");
+  const [prodActionError, setProdActionError] = useState<string | null>(null);
+  const [prodSubmitting, setProdSubmitting] = useState(false);
 
   // Calculations
   const filteredOrders = orders.filter(order => {
@@ -395,6 +547,60 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-project-anon-key`}
                   {stat.icon}
                 </div>
               </div>
+
+                {/* Products Management Section */}
+                <div className="mt-10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-white">Products</h3>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => { resetProductForm(); setIsProdModalOpen(true); }} className="btn-primary text-sm">Add Product</button>
+                    </div>
+                  </div>
+
+                  <div className="glass rounded-2xl p-4">
+                    {prodLoading ? (
+                      <div className="py-12 text-center text-surface-400">Loading products...</div>
+                    ) : products.length === 0 ? (
+                      <div className="py-12 text-center text-surface-400">No products yet. Create one to get started.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-surface-800 text-xs font-semibold uppercase tracking-wider text-surface-400 bg-surface-900/35">
+                              <th className="py-3 px-4">Image</th>
+                              <th className="py-3 px-4">Name</th>
+                              <th className="py-3 px-4">Price</th>
+                              <th className="py-3 px-4 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-surface-800/50">
+                            {products.map((p) => (
+                              <tr key={p.id} className="group hover:bg-surface-800/20 transition-smooth">
+                                <td className="py-3 px-4 w-24">
+                                  {p.image ? (
+                                    <img src={p.image} alt={p.name} className="w-20 h-12 object-cover rounded-md" />
+                                  ) : (
+                                    <div className="w-20 h-12 bg-surface-800 rounded-md flex items-center justify-center text-xs text-surface-500">No Image</div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="font-semibold text-white">{p.name}</div>
+                                </td>
+                                <td className="py-3 px-4 font-bold text-white">${p.price.toFixed(2)}</td>
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => handleEditProduct(p)} className="p-2 text-surface-400 hover:text-white rounded-lg">Edit</button>
+                                    <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-danger hover:bg-danger/10 rounded-lg">Delete</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
               <h3 className="text-2xl md:text-3xl font-extrabold text-white mb-1">{stat.value}</h3>
               <p className="text-xs text-surface-500">{stat.change}</p>
             </div>
@@ -636,6 +842,58 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-project-anon-key`}
                 >
                   {isSubmitting ? "Creating..." : "Save Order"}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Drawer: Create / Edit Product */}
+      {isProdModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-surface-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg glass rounded-3xl p-8 glow relative">
+            <button
+              onClick={() => { setIsProdModalOpen(false); resetProductForm(); }}
+              className="absolute top-6 right-6 p-2 text-surface-400 hover:text-white rounded-lg transition-smooth"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 className="text-xl font-bold text-white mb-2">{editingProductId ? "Edit Product" : "Create Product"}</h3>
+            <p className="text-sm text-surface-400 mb-6">Provide product details to display in the menu.</p>
+
+            {prodActionError && (
+              <div className="mb-4 p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm">
+                {prodActionError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateOrUpdateProduct} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-surface-400 mb-2">Image URL</label>
+                <input type="url" placeholder="https://...jpg" value={prodImage} onChange={(e) => setProdImage(e.target.value)} />
+                {prodImage && (
+                  <div className="mt-3">
+                    <img src={prodImage} alt="preview" className="w-40 h-24 object-cover rounded-md" />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-surface-400 mb-2">Name</label>
+                <input type="text" required placeholder="Product name" value={prodName} onChange={(e) => setProdName(e.target.value)} />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-surface-400 mb-2">Price ($)</label>
+                <input type="number" step="0.01" min="0.01" required value={prodPrice} onChange={(e) => setProdPrice(Number(e.target.value))} />
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button type="button" onClick={() => { setIsProdModalOpen(false); resetProductForm(); }} className="flex-1 btn-secondary">Cancel</button>
+                <button type="submit" disabled={prodSubmitting} className="flex-1 btn-primary py-3.5">{prodSubmitting ? "Saving..." : editingProductId ? "Update Product" : "Create Product"}</button>
               </div>
             </form>
           </div>
