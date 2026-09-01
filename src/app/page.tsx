@@ -1,10 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import Image from "next/image";
-import { MENU_ITEMS, INITIAL_REVIEWS, MenuItem, Review } from "@/lib/restaurant-data";
-import { createClient } from "@/lib/supabase/client";
+import { MENU_ITEMS, INITIAL_REVIEWS, MenuItem, Review, Offer, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry } from "@/lib/restaurant-data";
 import RestaurantProfile from "@/components/RestaurantProfile";
 
 interface CartItem {
@@ -17,6 +15,8 @@ export default function Home() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(MENU_ITEMS);
+  const [offers, setOffers] = useState<Offer[]>([]);
   
   // Review Modal State
   const [isReviewOpen, setIsReviewOpen] = useState(false);
@@ -24,25 +24,37 @@ export default function Home() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   
-  // Checkout Form State
+  // Checkout State
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderError, setOrderError] = useState("");
 
-  const supabase = createClient();
-
-  // Load custom reviews from localStorage if available
+  // Load menu items, offers, and reviews
   useEffect(() => {
+    setMenuItems(getMenuItems());
+    setOffers(getActiveOffers());
+
     const savedReviews = localStorage.getItem("abrama_custom_reviews");
     if (savedReviews) {
       setReviews([...INITIAL_REVIEWS, ...JSON.parse(savedReviews)]);
     }
-  }, []);
 
-  // No admin UI in this build — skip admin checks
-  useEffect(() => {}, [supabase]);
+    // Listen for product/offer updates from admin
+    const onUpdate = () => {
+      setMenuItems(getMenuItems());
+      setOffers(getActiveOffers());
+    };
+    window.addEventListener('orderflow_products_updated', onUpdate);
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'orderflow_menu_items' || e.key === 'orderflow_offers') onUpdate();
+    });
+    return () => {
+      window.removeEventListener('orderflow_products_updated', onUpdate);
+    };
+  }, []);
 
   const handleAddToCart = (dish: MenuItem) => {
     const existing = cart.find(item => item.dish.id === dish.id);
@@ -51,7 +63,6 @@ export default function Home() {
     } else {
       setCart([...cart, { dish, quantity: 1 }]);
     }
-    // Automatically open cart when item is added
     setIsCartOpen(true);
   };
 
@@ -72,49 +83,43 @@ export default function Home() {
     setIsOrdering(true);
     setOrderError("");
 
-    // Calculate aggregated information to match Dashboard expects
     const itemListString = cart.map(item => `${item.quantity}x ${item.dish.name}`).join(", ");
     const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
-    const totalPrice = cart.reduce((sum, item) => sum + (item.dish.price * item.quantity), 0);
-
-    const newOrderPayload = {
-      customer_name: customerName,
-      customer_email: customerEmail,
-      product_name: itemListString,
-      quantity: totalQuantity,
-      price: parseFloat(totalPrice.toFixed(2)),
-      status: "pending" as const,
-    };
+    const totalPrice = cart.reduce((sum, item) => {
+      const { price } = getEffectivePrice(item.dish, offers);
+      return sum + (price * item.quantity);
+    }, 0);
 
     try {
-      // 1. Try to fetch user authentication from client
-      const { data: { user } } = await supabase.auth.getUser();
+      // Save enquiry to localStorage
+      saveEnquiry({
+        id: `enq-${Date.now()}`,
+        customerName,
+        customerPhone,
+        items: itemListString,
+        totalQuantity,
+        totalPrice: parseFloat(totalPrice.toFixed(2)),
+        createdAt: new Date().toISOString(),
+      });
 
-      if (user) {
-        // If an admin is testing the storefront while logged in, save to the real Supabase DB
-        const { error } = await supabase
-          .from("orders")
-          .insert({
-            ...newOrderPayload,
-            user_id: user.id
-          });
-        if (error) throw error;
-      } else {
-        // 2. Demo fallback / Guest Checkout: Save to LocalStorage
-        const localOrder = {
-          ...newOrderPayload,
-          id: Math.random().toString(36).substr(2, 9),
-          created_at: new Date().toISOString()
-        };
-        const existingLocal = JSON.parse(localStorage.getItem("orderflow_orders") || "[]");
-        localStorage.setItem("orderflow_orders", JSON.stringify([localOrder, ...existingLocal]));
-      }
+      // Also save as order for dashboard
+      const localOrder = {
+        id: Math.random().toString(36).substr(2, 9),
+        created_at: new Date().toISOString(),
+        customer_name: customerName,
+        customer_email: customerPhone,
+        product_name: itemListString,
+        quantity: totalQuantity,
+        price: parseFloat(totalPrice.toFixed(2)),
+        status: "pending"
+      };
+      const existingLocal = JSON.parse(localStorage.getItem("orderflow_orders") || "[]");
+      localStorage.setItem("orderflow_orders", JSON.stringify([localOrder, ...existingLocal]));
 
-      // Success sequence
-      // Open WhatsApp with order details
+      // Open WhatsApp
       try {
-        const whatsappNumber = "918113021038"; // country code +91
-        const waMessage = encodeURIComponent(`New order from ${newOrderPayload.customer_name} (${newOrderPayload.customer_email}): ${itemListString}. Qty: ${newOrderPayload.quantity}, Total: ₹${newOrderPayload.price.toFixed(2)}`);
+        const whatsappNumber = "918113021038";
+        const waMessage = encodeURIComponent(`New order from ${customerName} (${customerPhone}): ${itemListString}. Qty: ${totalQuantity}, Total: ₹${totalPrice.toFixed(2)}`);
         const waUrl = `https://wa.me/${whatsappNumber}?text=${waMessage}`;
         window.open(waUrl, "_blank");
       } catch (waErr) {
@@ -124,8 +129,9 @@ export default function Home() {
       setOrderPlaced(true);
       setCart([]);
       setCustomerName("");
-      setCustomerEmail("");
+      setCustomerPhone("");
       setIsCartOpen(false);
+      setIsCheckoutOpen(false);
     } catch (err: any) {
       console.error(err);
       setOrderError(err.message || "Failed to place order. Please try again.");
@@ -149,11 +155,9 @@ export default function Home() {
     const newReviewsList = [newReview, ...reviews];
     setReviews(newReviewsList);
 
-    // Save custom reviews
     const customOnly = newReviewsList.filter(r => r.id.startsWith("custom-"));
     localStorage.setItem("abrama_custom_reviews", JSON.stringify(customOnly));
 
-    // Reset Form
     setReviewAuthor("");
     setReviewComment("");
     setReviewRating(5);
@@ -162,25 +166,26 @@ export default function Home() {
 
   // Calculations
   const filteredDishes = activeCategory === "all" 
-    ? MENU_ITEMS 
-    : MENU_ITEMS.filter(item => item.category === activeCategory);
+    ? menuItems 
+    : menuItems.filter(item => item.category === activeCategory);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const cartSubtotal = cart.reduce((sum, item) => sum + (item.dish.price * item.quantity), 0);
+  const cartSubtotal = cart.reduce((sum, item) => {
+    const { price } = getEffectivePrice(item.dish, offers);
+    return sum + (price * item.quantity);
+  }, 0);
 
   return (
     <div className="min-h-screen flex flex-col text-slate-100 relative selection:bg-amber-500 selection:text-slate-900">
       {/* Navigation */}
-      <nav className="flex items-center justify-between px-6 py-4 md:px-12 glass-light sticky top-0 z-30 backdrop-blur-md">
+      <nav className="flex items-center justify-between px-4 py-3 md:px-12 md:py-4 glass-light sticky top-0 z-30 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-600 to-red-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
-            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707-.707M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-amber-500/20 border border-amber-500/20 flex-shrink-0">
+            <Image src="/logo.png" alt="ABR Asma Logo" width={40} height={40} className="object-cover w-full h-full" />
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-extrabold tracking-tight text-white leading-none">ABR Asma</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider text-amber-500">Peringathur</span>
+            <span className="text-base md:text-lg font-extrabold tracking-tight text-white leading-none">ABR ASMA RESTAURANT</span>
+            <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-wider text-amber-500">Peringathur</span>
           </div>
         </div>
 
@@ -189,7 +194,6 @@ export default function Home() {
           <a href="#reviews" className="hover:text-amber-400 transition-smooth">Reviews</a>
           <a href="#location" className="hover:text-amber-400 transition-smooth">Location</a>
           <span className="w-[1px] h-4 bg-slate-700"></span>
-          
         </div>
 
         <div className="flex items-center gap-3">
@@ -207,55 +211,58 @@ export default function Home() {
               </span>
             )}
           </button>
-          
-          {/* Sign-in removed: authentication UI disabled */}
         </div>
       </nav>
 
       {/* Hero Section */}
-      <header className="relative flex-1 flex flex-col items-center justify-center px-6 py-20 text-center overflow-hidden">
-        {/* Background Gradients & Accents */}
+      <header className="relative flex-1 flex flex-col items-center justify-center px-4 py-12 md:px-6 md:py-20 text-center overflow-hidden">
+        {/* Background Gradients */}
         <div className="absolute inset-0 z-0">
           <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
           <div className="absolute bottom-10 left-1/4 w-80 h-80 bg-red-600/5 rounded-full blur-[90px] pointer-events-none" />
         </div>
 
         <div className="max-w-4xl mx-auto z-10 flex flex-col items-center">
-          <a
-            href="https://www.google.com/maps/place/ABR+ASMA+RESTAURANT/@11.7142064,75.5820788,17z/data=!3m1!4b1!4m6!3m5!1s0x3ba429f23edab745:0x855a37d028d53ecf!8m2!3d11.7142064!4d75.5820788!16s%2Fg%2F11rjz53ljm"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border border-amber-500/20 text-xs font-semibold text-amber-400 hover:bg-slate-800/40 transition-smooth mb-8"
-          >
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-            </span>
-            ⭐ 3.7 Google Business Rating
-          </a>
+          {/* Active Offers Banner */}
+          {offers.length > 0 && (
+            <div className="w-full max-w-2xl mb-8 space-y-3">
+              {offers.map(offer => (
+                <div key={offer.id} className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500/15 to-orange-500/10 border border-amber-500/25 backdrop-blur-sm animate-fadeIn">
+                  <span className="text-xl">🔥</span>
+                  <div className="flex-1 text-left">
+                    <span className="text-sm font-extrabold text-amber-400">{offer.title}</span>
+                    {offer.description && <span className="text-xs text-slate-400 ml-2">{offer.description}</span>}
+                  </div>
+                  <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full whitespace-nowrap">
+                    {offer.discountType === 'percentage' ? `${offer.discountValue}% OFF` : `₹${offer.discountValue} OFF`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
-          <h1 className="text-4xl md:text-7xl font-extrabold text-white mb-6 tracking-tight leading-tight slide-up">
+          <h1 className="text-3xl sm:text-4xl md:text-7xl font-extrabold text-white mb-4 md:mb-6 tracking-tight leading-tight slide-up">
             Savor Authentic <br className="hidden md:inline" />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-orange-400">
               Malabar Delicacies
             </span>
           </h1>
 
-          <p className="text-base md:text-lg text-slate-400 max-w-2xl mx-auto mb-10 fade-in">
+          <p className="text-sm md:text-lg text-slate-400 max-w-2xl mx-auto mb-8 md:mb-10 fade-in px-2">
             From slow-cooked Thalassery Chicken Biriyani and juicy Tandoori grills to spicy local Kerala Beef Fry, experience the true spice legacy of Peringathur.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 fade-in">
-            <a href="#menu" className="btn-primary text-sm px-8 py-4 bg-gradient-to-tr from-amber-600 to-amber-500 shadow-amber-500/20">
+          <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4 fade-in">
+            <a href="#menu" className="btn-primary text-sm px-6 py-3 md:px-8 md:py-4 bg-gradient-to-tr from-amber-600 to-amber-500 shadow-amber-500/20">
               Explore Our Menu
             </a>
-            <a href="#location" className="btn-secondary text-sm px-8 py-4">
+            <a href="#location" className="btn-secondary text-sm px-6 py-3 md:px-8 md:py-4">
               Find Restaurant
             </a>
           </div>
 
-          {/* Quick Info Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-5xl mt-16 text-left">
+          {/* Quick Info Grid - Responsive */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 w-full max-w-5xl mt-10 md:mt-16 text-left">
             {[
               {
                 title: "Opening Hours",
@@ -299,14 +306,14 @@ export default function Home() {
                 )
               }
             ].map((info, idx) => (
-              <div key={idx} className="glass rounded-2xl p-5 hover:scale-[1.01] transition-smooth border border-slate-800 hover:border-slate-700/60 flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-slate-800/80 flex items-center justify-center flex-shrink-0 border border-slate-700/40">
+              <div key={idx} className="glass rounded-2xl p-4 md:p-5 hover:scale-[1.01] transition-smooth border border-slate-800 hover:border-slate-700/60 flex items-start gap-3 md:gap-4">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-slate-800/80 flex items-center justify-center flex-shrink-0 border border-slate-700/40">
                   {info.icon}
                 </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest leading-none mb-1.5">{info.title}</h4>
-                  <p className="text-sm font-bold text-white leading-tight">{info.desc}</p>
-                  <p className="text-[11px] text-slate-400/80 mt-1">{info.sub}</p>
+                <div className="min-w-0">
+                  <h4 className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-widest leading-none mb-1 md:mb-1.5">{info.title}</h4>
+                  <p className="text-xs md:text-sm font-bold text-white leading-tight">{info.desc}</p>
+                  <p className="text-[10px] md:text-[11px] text-slate-400/80 mt-0.5 md:mt-1">{info.sub}</p>
                 </div>
               </div>
             ))}
@@ -315,12 +322,12 @@ export default function Home() {
       </header>
 
       {/* Menu Section */}
-      <section id="menu" className="py-24 px-6 md:px-12 bg-slate-950/40 relative z-10 border-t border-slate-900">
+      <section id="menu" className="py-16 md:py-24 px-4 md:px-12 bg-slate-950/40 relative z-10 border-t border-slate-900">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 mb-8 md:mb-12">
             <div>
-              <h2 className="text-3xl font-extrabold text-white text-left">Explore Chef's Specials</h2>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-white text-left">Explore Chef&apos;s Specials</h2>
               <p className="text-sm text-slate-405 mt-2">Curated selection of our best and freshest menu items.</p>
             </div>
             {/* Filters */}
@@ -335,7 +342,7 @@ export default function Home() {
                 <button
                   key={category.id}
                   onClick={() => setActiveCategory(category.id)}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-smooth border uppercase tracking-wider ${
+                  className={`px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold whitespace-nowrap transition-smooth border uppercase tracking-wider ${
                     activeCategory === category.id
                       ? "bg-amber-500 border-amber-500/20 text-slate-950 font-extrabold"
                       : "glass border-slate-800 text-slate-400 hover:text-white"
@@ -348,71 +355,97 @@ export default function Home() {
           </div>
 
           {/* Menu Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredDishes.map((dish) => (
-              <div 
-                key={dish.id} 
-                className="glass rounded-3xl overflow-hidden hover:scale-[1.01] hover:border-slate-700/50 transition-smooth group flex flex-col"
-              >
-                {/* Image Container with Fallback */}
-                <div className="h-52 relative w-full overflow-hidden bg-slate-900 flex items-center justify-center">
-                  {dish.image ? (
-                    <Image 
-                      src={dish.image} 
-                      alt={dish.name}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-smooth"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 bg-gradient-to-tr from-slate-900 to-slate-800 flex items-center justify-center p-6 text-center">
-                      <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-amber-500/60 mb-2 border border-slate-700/20">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            {filteredDishes.map((dish) => {
+              const priceInfo = getEffectivePrice(dish, offers);
+              return (
+                <div 
+                  key={dish.id} 
+                  className="glass rounded-3xl overflow-hidden hover:scale-[1.01] hover:border-slate-700/50 transition-smooth group flex flex-col"
+                >
+                  {/* Image Container */}
+                  <div className="h-44 md:h-52 relative w-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                    {dish.image ? (
+                      dish.image.startsWith("/") ? (
+                        <Image 
+                          src={dish.image} 
+                          alt={dish.name}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-smooth"
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={dish.image} alt={dish.name} className="w-full h-full object-cover group-hover:scale-105 transition-smooth" />
+                      )
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-tr from-slate-900 to-slate-800 flex items-center justify-center p-6 text-center">
+                        <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-amber-500/60 mb-2 border border-slate-700/20">
+                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                        </div>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">ABR Asma Specialties</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">ABR Asma Specialties</span>
-                    </div>
-                  )}
-                  {/* Category Tag */}
-                  <span className="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-slate-950/80 backdrop-blur-md text-[10px] uppercase font-bold tracking-wider text-amber-500 border border-slate-800">
-                    {dish.category}
-                  </span>
-                </div>
-
-                {/* Details */}
-                <div className="p-6 flex-1 flex flex-col justify-between text-left">
-                  <div>
-                    <div className="flex justify-between items-start gap-4 mb-2">
-                      <h3 className="font-bold text-white text-lg group-hover:text-amber-400 transition-smooth">{dish.name}</h3>
-                      <span className="text-amber-400 font-extrabold text-lg">${dish.price.toFixed(2)}</span>
-                    </div>
-                    <p className="text-slate-400 text-sm leading-relaxed mb-6 line-clamp-3">{dish.description}</p>
+                    )}
+                    {/* Category Tag */}
+                    <span className="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-slate-950/80 backdrop-blur-md text-[10px] uppercase font-bold tracking-wider text-amber-500 border border-slate-800">
+                      {dish.category}
+                    </span>
+                    {/* Offer Badge */}
+                    {priceInfo.offerTitle && (
+                      <span className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-red-500/90 backdrop-blur-md text-[10px] uppercase font-bold tracking-wider text-white">
+                        {offers.find(o => o.title === priceInfo.offerTitle)?.discountType === 'percentage' 
+                          ? `${offers.find(o => o.title === priceInfo.offerTitle)?.discountValue}% OFF`
+                          : `₹${offers.find(o => o.title === priceInfo.offerTitle)?.discountValue} OFF`
+                        }
+                      </span>
+                    )}
                   </div>
 
-                  <button 
-                    onClick={() => handleAddToCart(dish)}
-                    className="w-full btn-secondary text-sm font-semibold flex items-center justify-center gap-2 group-hover:bg-amber-500 group-hover:text-slate-900 group-hover:border-transparent transition-smooth"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add to Cart
-                  </button>
+                  {/* Details */}
+                  <div className="p-5 md:p-6 flex-1 flex flex-col justify-between text-left">
+                    <div>
+                      <div className="flex justify-between items-start gap-4 mb-2">
+                        <h3 className="font-bold text-white text-base md:text-lg group-hover:text-amber-400 transition-smooth">{dish.name}</h3>
+                        <div className="text-right shrink-0">
+                          {priceInfo.originalPrice ? (
+                            <>
+                              <span className="text-slate-500 line-through text-sm mr-1.5">₹{priceInfo.originalPrice.toFixed(2)}</span>
+                              <span className="text-amber-400 font-extrabold text-lg">₹{priceInfo.price.toFixed(2)}</span>
+                            </>
+                          ) : (
+                            <span className="text-amber-400 font-extrabold text-lg">₹{priceInfo.price.toFixed(2)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-slate-400 text-sm leading-relaxed mb-4 md:mb-6 line-clamp-3">{dish.description}</p>
+                    </div>
+
+                    <button 
+                      onClick={() => handleAddToCart(dish)}
+                      className="w-full btn-secondary text-sm font-semibold flex items-center justify-center gap-2 group-hover:bg-amber-500 group-hover:text-slate-900 group-hover:border-transparent transition-smooth"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add to Cart
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* Info & Reviews Split Section */}
-      <section id="reviews" className="py-24 px-6 md:px-12 bg-slate-950/80 border-t border-slate-900 relative z-10">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Reviews List & Write Form - 7 Cols */}
+      <section id="reviews" className="py-16 md:py-24 px-4 md:px-12 bg-slate-950/80 border-t border-slate-900 relative z-10">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
+          {/* Reviews List */}
           <div className="lg:col-span-7 flex flex-col text-left">
             <div className="flex items-center justify-between gap-4 mb-8">
               <div>
-                <h2 className="text-3xl font-extrabold text-white">Google Guest Reviews</h2>
+                <h2 className="text-2xl md:text-3xl font-extrabold text-white">Google Guest Reviews</h2>
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-sm font-bold text-amber-400">3.7 out of 5 stars</span>
                   <div className="flex items-center text-amber-400 gap-0.5">
@@ -433,7 +466,7 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Custom Review Form (collapsible) */}
+            {/* Review Form */}
             {isReviewOpen && (
               <form onSubmit={handleAddReview} className="glass p-6 rounded-2xl border-amber-500/20 mb-8 animate-fadeIn">
                 <h3 className="font-bold text-white text-base mb-4">Post Guest Feedback</h3>
@@ -493,7 +526,7 @@ export default function Home() {
               </form>
             )}
 
-            {/* Scrollable Reviews Area */}
+            {/* Reviews List */}
             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
               {reviews.map((rev) => (
                 <div key={rev.id} className="glass p-5 rounded-2xl border-slate-800 flex flex-col gap-3">
@@ -502,7 +535,6 @@ export default function Home() {
                       <span className="font-extrabold text-sm text-white">{rev.author}</span>
                       <span className="text-[10px] text-slate-500 ml-2 font-semibold uppercase">{rev.date}</span>
                     </div>
-                    {/* Stars */}
                     <div className="flex items-center text-amber-500 text-xs">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <span key={i} className={i < rev.rating ? "text-amber-500" : "text-slate-800"}>★</span>
@@ -515,19 +547,19 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Location details & Map Embed - 5 Cols */}
+          {/* Location */}
           <RestaurantProfile />
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-12 text-center text-slate-500 border-t border-slate-900 bg-slate-950/60 text-xs">
+      <footer className="py-8 md:py-12 text-center text-slate-500 border-t border-slate-900 bg-slate-950/60 text-xs px-4">
         <p className="mb-2">ABR Asma Restaurant &copy; {new Date().getFullYear()} – Traditional Taste of Malabar.</p>
-        <p className="text-slate-600/80">Powered by Next.js and integrated with OrderFlow Dashboard client mapping.</p>
+        <p className="text-slate-600/80">Powered by Next.js and integrated with OrderFlow Dashboard.</p>
       </footer>
 
-      {/* Floating Cart Button (visible on mobile if cart is closed) */}
-      {cartCount > 0 && !isCartOpen && (
+      {/* Floating Cart Button (mobile) */}
+      {cartCount > 0 && !isCartOpen && !isCheckoutOpen && (
         <button
           onClick={() => setIsCartOpen(true)}
           className="fixed bottom-6 right-6 z-40 bg-amber-500 text-slate-950 p-4 rounded-full shadow-2xl flex items-center justify-center gap-2 hover:bg-amber-400 transition-smooth font-extrabold"
@@ -539,10 +571,9 @@ export default function Home() {
         </button>
       )}
 
-      {/* Sliding Cart Sidebar Drawer */}
+      {/* Cart Drawer — Only shows products + quantity */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
-          {/* Backdrop Click */}
           <div className="absolute inset-0 -z-10" onClick={() => setIsCartOpen(false)} />
           
           <div className="w-full max-w-md bg-slate-900 border-l border-slate-800/80 p-6 flex flex-col justify-between shadow-2xl relative animate-slideLeft h-full overflow-y-auto">
@@ -563,12 +594,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {orderError && (
-                <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs">
-                  {orderError}
-                </div>
-              )}
-
               {/* Items List */}
               {cart.length === 0 ? (
                 <div className="text-center py-20 text-slate-500">
@@ -579,86 +604,166 @@ export default function Home() {
                   <p className="text-xs mt-1">Explore our specials and add dishes to begin.</p>
                 </div>
               ) : (
-                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-                  {cart.map((item) => (
-                    <div key={item.dish.id} className="flex justify-between items-center py-3 border-b border-slate-800/40">
-                      <div className="text-left max-w-[200px]">
-                        <h4 className="font-bold text-sm text-white">{item.dish.name}</h4>
-                        <p className="text-xs text-amber-400 font-medium mt-0.5">${item.dish.price.toFixed(2)}</p>
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                  {cart.map((item) => {
+                    const priceInfo = getEffectivePrice(item.dish, offers);
+                    return (
+                      <div key={item.dish.id} className="flex justify-between items-center py-3 border-b border-slate-800/40">
+                        <div className="text-left max-w-[200px]">
+                          <h4 className="font-bold text-sm text-white">{item.dish.name}</h4>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {priceInfo.originalPrice ? (
+                              <>
+                                <span className="text-[10px] text-slate-500 line-through">₹{priceInfo.originalPrice.toFixed(2)}</span>
+                                <span className="text-xs text-amber-400 font-medium">₹{priceInfo.price.toFixed(2)}</span>
+                              </>
+                            ) : (
+                              <span className="text-xs text-amber-400 font-medium">₹{priceInfo.price.toFixed(2)}</span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Quantity Controls */}
+                        <div className="flex items-center gap-3">
+                          <button 
+                            onClick={() => handleUpdateQty(item.dish.id, -1)}
+                            className="w-7 h-7 rounded bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
+                          >
+                            -
+                          </button>
+                          <span className="text-sm font-extrabold text-white w-4 text-center">{item.quantity}</span>
+                          <button 
+                            onClick={() => handleUpdateQty(item.dish.id, 1)}
+                            className="w-7 h-7 rounded bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
-                      
-                      {/* Quantity Controls */}
-                      <div className="flex items-center gap-3">
-                        <button 
-                          onClick={() => handleUpdateQty(item.dish.id, -1)}
-                          className="w-7 h-7 rounded bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
-                        >
-                          -
-                        </button>
-                        <span className="text-sm font-extrabold text-white w-4 text-center">{item.quantity}</span>
-                        <button 
-                          onClick={() => handleUpdateQty(item.dish.id, 1)}
-                          className="w-7 h-7 rounded bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* Checkout Form */}
+            {/* Proceed to Checkout Button */}
             {cart.length > 0 && (
               <div className="border-t border-slate-800 pt-6 mt-6">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex justify-between items-center mb-4">
                   <span className="text-sm font-bold text-slate-400">Total Bill</span>
-                  <span className="text-xl font-extrabold text-amber-500">${cartSubtotal.toFixed(2)}</span>
+                  <span className="text-xl font-extrabold text-amber-500">₹{cartSubtotal.toFixed(2)}</span>
                 </div>
-
-                <form onSubmit={handlePlaceOrder} className="space-y-4 text-left">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-widest mb-1.5">Your Full Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="Enter name"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="px-4 py-2.5 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-widest mb-1.5">Email Address</label>
-                    <input 
-                      type="email" 
-                      required
-                      placeholder="Enter email"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      className="px-4 py-2.5 text-sm"
-                    />
-                  </div>
-
-                  <button 
-                    type="submit" 
-                    disabled={isOrdering}
-                    className="w-full btn-primary py-3.5 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent select-none mt-2"
-                  >
-                    {isOrdering ? "Processing order..." : "Submit Malabar Order"}
-                  </button>
-                  <p className="text-[10px] text-slate-500 text-center leading-normal mt-2">
-                    Orders placed will instantly synchronize with the local admin tracking system.
-                  </p>
-                </form>
+                <button 
+                  onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                  Proceed to Checkout
+                </button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Success Modal Overlay */}
+      {/* Checkout Modal — Name + Phone Number */}
+      {isCheckoutOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg glass rounded-3xl p-6 md:p-8 border-amber-500/20 relative animate-scaleUp">
+            {/* Close */}
+            <button 
+              onClick={() => setIsCheckoutOpen(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-lg transition-smooth"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <h3 className="text-xl font-extrabold text-white mb-1">Checkout</h3>
+            <p className="text-sm text-slate-400 mb-6">Complete your order details to place via WhatsApp</p>
+
+            {/* Order Summary */}
+            <div className="glass rounded-2xl p-4 mb-6 border border-slate-800 max-h-48 overflow-y-auto">
+              {cart.map(item => {
+                const priceInfo = getEffectivePrice(item.dish, offers);
+                return (
+                  <div key={item.dish.id} className="flex justify-between items-center py-2 border-b border-slate-800/30 last:border-0">
+                    <span className="text-sm text-white">{item.quantity}x {item.dish.name}</span>
+                    <span className="text-sm text-amber-400 font-bold">₹{(priceInfo.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                );
+              })}
+              <div className="flex justify-between items-center pt-3 mt-2 border-t border-slate-700">
+                <span className="text-sm font-bold text-white">Total</span>
+                <span className="text-lg font-extrabold text-amber-500">₹{cartSubtotal.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {orderError && (
+              <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs">
+                {orderError}
+              </div>
+            )}
+
+            {/* Checkout Form */}
+            <form onSubmit={handlePlaceOrder} className="space-y-4 text-left">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-widest mb-1.5">Your Full Name</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Enter your name"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="px-4 py-3 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-widest mb-1.5">Phone Number</label>
+                <input 
+                  type="tel" 
+                  required
+                  placeholder="+91 XXXXX XXXXX"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  className="px-4 py-3 text-sm"
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isOrdering}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm border-transparent select-none mt-2 hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isOrdering ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Processing order...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Order via WhatsApp
+                  </>
+                )}
+              </button>
+              <p className="text-[10px] text-slate-500 text-center leading-normal mt-2">
+                You&apos;ll be redirected to WhatsApp to confirm your order directly with the restaurant.
+              </p>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
       {orderPlaced && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-md glass rounded-3xl p-6 text-center border-amber-500/20 relative animate-scaleUp glow">
@@ -687,15 +792,12 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <button 
-                onClick={() => setOrderPlaced(false)}
-                className="w-full btn-primary py-3.5 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent"
-              >
-                Explore More Dishes
-              </button>
-              
-            </div>
+            <button 
+              onClick={() => setOrderPlaced(false)}
+              className="w-full btn-primary py-3.5 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent"
+            >
+              Explore More Dishes
+            </button>
           </div>
         </div>
       )}

@@ -13,7 +13,6 @@ export async function middleware(request: NextRequest) {
   });
 
   const configured = isSupabaseConfigured();
-  let user: { email?: string } | null = null;
 
   if (configured) {
     const supabase = createServerClient(
@@ -39,19 +38,16 @@ export async function middleware(request: NextRequest) {
       }
     );
 
-    const {
-      data: { user: sbUser },
-    } = await supabase.auth.getUser();
-    user = sbUser;
-  } else {
-    // Demo mode: Check cookie
-    const demoUser = request.cookies.get("demo-user");
-    if (demoUser) {
-      user = { email: demoUser.value };
-    }
+    await supabase.auth.getUser();
   }
 
-  // Authentication enforcement disabled: app will not auto-redirect users.
+  // Protect /dashboard route - require admin-auth cookie
+  if (request.nextUrl.pathname.startsWith('/dashboard')) {
+    const adminAuth = request.cookies.get('admin-auth');
+    if (!adminAuth || adminAuth.value !== 'authenticated') {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+  }
 
   return supabaseResponse;
 }

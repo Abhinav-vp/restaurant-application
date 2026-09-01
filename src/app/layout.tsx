@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import AdminButton from "@/components/AdminButton";
 
 export const metadata: Metadata = {
-  title: "OrderFlow — Smart Order Management",
-  description: "A modern order management system built with Next.js and Supabase",
+  title: "ABR Asma Restaurant — Traditional Taste of Malabar",
+  description: "Order authentic Malabar Biriyani, Tandoori Grills, and Kerala Beef Fry from ABR Asma Restaurant, Peringathur. Fast delivery & takeaway.",
 };
 
 export default function RootLayout({
@@ -24,7 +23,6 @@ export default function RootLayout({
       </head>
       <body className="gradient-bg min-h-screen">
            {children}
-           <AdminButton />
       </body>
     </html>
   );

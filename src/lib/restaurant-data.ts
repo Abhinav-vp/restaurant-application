@@ -3,6 +3,7 @@ export interface MenuItem {
   name: string;
   category: 'biriyani' | 'mains' | 'breads' | 'beverages';
   price: number;
+  originalPrice?: number;
   description: string;
   image?: string;
 }
@@ -13,6 +14,27 @@ export interface Review {
   rating: number;
   comment: string;
   date: string;
+}
+
+export interface Offer {
+  id: string;
+  title: string;
+  description: string;
+  discountType: 'percentage' | 'flat';
+  discountValue: number;
+  applicableProducts: string[]; // product IDs, empty = all products
+  active: boolean;
+  createdAt: string;
+}
+
+export interface Enquiry {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  items: string;
+  totalQuantity: number;
+  totalPrice: number;
+  createdAt: string;
 }
 
 export const MENU_ITEMS: MenuItem[] = [
@@ -161,3 +183,68 @@ export const BUSINESS_PROFILE: BusinessProfile = {
   googleMapsUrl:
     "https://www.google.com/maps/place/ABR+ASMA+RESTAURANT/@11.7142064,75.5820788,17z"
 };
+
+// Helper: load admin-managed menu items from localStorage, fallback to defaults
+export function getMenuItems(): MenuItem[] {
+  if (typeof window === 'undefined') return MENU_ITEMS;
+  try {
+    const stored = localStorage.getItem('orderflow_menu_items');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return MENU_ITEMS;
+}
+
+// Helper: load active offers from localStorage
+export function getActiveOffers(): Offer[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem('orderflow_offers');
+    if (stored) {
+      const parsed: Offer[] = JSON.parse(stored);
+      return parsed.filter(o => o.active);
+    }
+  } catch {}
+  return [];
+}
+
+// Helper: compute effective price for a menu item after applying best offer
+export function getEffectivePrice(item: MenuItem, offers: Offer[]): { price: number; originalPrice?: number; offerTitle?: string } {
+  let bestDiscount = 0;
+  let bestOfferTitle = '';
+
+  for (const offer of offers) {
+    const applicable = offer.applicableProducts.length === 0 || offer.applicableProducts.includes(item.id);
+    if (!applicable) continue;
+
+    let discount = 0;
+    if (offer.discountType === 'percentage') {
+      discount = (item.price * offer.discountValue) / 100;
+    } else {
+      discount = offer.discountValue;
+    }
+
+    if (discount > bestDiscount) {
+      bestDiscount = discount;
+      bestOfferTitle = offer.title;
+    }
+  }
+
+  if (bestDiscount > 0) {
+    const discounted = Math.max(0, item.price - bestDiscount);
+    return { price: parseFloat(discounted.toFixed(2)), originalPrice: item.price, offerTitle: bestOfferTitle };
+  }
+
+  return { price: item.price };
+}
+
+// Helper: save an enquiry to localStorage
+export function saveEnquiry(enquiry: Enquiry): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = JSON.parse(localStorage.getItem('orderflow_enquiries') || '[]');
+    localStorage.setItem('orderflow_enquiries', JSON.stringify([enquiry, ...existing]));
+  } catch {}
+}
