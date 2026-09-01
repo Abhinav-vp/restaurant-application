@@ -233,9 +233,7 @@ export default function Home() {
             )}
           </button>
           
-          <Link href="/login" className="btn-primary text-xs px-4 py-2 border border-amber-500/10">
-            Sign In
-          </Link>
+          {/* Sign-in removed: authentication UI disabled */}
         </div>
       </nav>
 

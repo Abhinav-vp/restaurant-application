@@ -51,22 +51,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Redirect unauthenticated users to login
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/signup") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    request.nextUrl.pathname !== "/"
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
-
-  // Redirect authenticated users away from auth pages
-  // Do not force-redirect authenticated users to the dashboard anymore.
-  // Allow authenticated users to access auth pages or be redirected by app logic.
+  // Authentication enforcement disabled: app will not auto-redirect users.
 
   return supabaseResponse;
 }

@@ -11,14 +11,14 @@ export default async function DashboardPage() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      redirect("/login");
+      redirect("/");
     }
     userEmail = user.email || "";
   } else {
     const cookieStore = await cookies();
     const demoUser = cookieStore.get("demo-user");
     if (!demoUser) {
-      redirect("/login");
+      redirect("/");
     }
     userEmail = demoUser.value || "";
   }
