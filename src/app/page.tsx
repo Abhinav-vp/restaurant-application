@@ -302,37 +302,37 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col text-slate-100 relative selection:bg-amber-500 selection:text-slate-900">
+    <div className="min-h-screen flex flex-col text-slate-100 relative selection:bg-amber-500 selection:text-slate-950 font-sans">
       {/* Navigation */}
-      <nav className="flex items-center justify-between px-4 py-3 md:px-12 md:py-4 glass-light sticky top-0 z-30 backdrop-blur-md">
+      <nav className="flex items-center justify-between px-4 py-3.5 md:px-12 md:py-4 glass-light sticky top-0 z-40 backdrop-blur-xl border-b border-amber-500/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-amber-500/20 border border-amber-500/20 flex-shrink-0">
-            <Image src="/logo.png" alt="ABR Asma Logo" width={40} height={40} className="object-cover w-full h-full" />
+          <div className="w-11 h-11 rounded-2xl overflow-hidden shadow-lg shadow-amber-500/20 border border-amber-500/30 flex-shrink-0 bg-slate-900 flex items-center justify-center">
+            <Image src="/logo.png" alt="ABR Asma Logo" width={44} height={44} className="object-cover w-full h-full" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-base md:text-lg font-extrabold tracking-tight text-white leading-none">ABR ASMA RESTAURANT</span>
-            <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-wider text-amber-500">Peringathur</span>
+          <div className="flex flex-col text-left">
+            <span className="text-base md:text-lg font-black tracking-tight text-white leading-none font-heading">ABR ASMA RESTAURANT</span>
+            <span className="text-[10px] uppercase font-extrabold tracking-widest text-amber-400 mt-0.5">Peringathur • Malabar Cuisine</span>
           </div>
         </div>
 
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium">
+        <div className="hidden md:flex items-center gap-8 text-xs font-bold uppercase tracking-widest text-slate-300">
           <a href="#menu" className="hover:text-amber-400 transition-smooth">Menu</a>
           <a href="#reviews" className="hover:text-amber-400 transition-smooth">Reviews</a>
           <a href="#location" className="hover:text-amber-400 transition-smooth">Location</a>
-          <span className="w-[1px] h-4 bg-slate-700"></span>
+          <span className="w-[1px] h-4 bg-slate-800"></span>
         </div>
 
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsCartOpen(true)}
-            className="relative p-2.5 rounded-xl glass hover:bg-slate-800/80 transition-smooth"
+            className="relative p-3 rounded-2xl glass hover:border-amber-500/40 hover:bg-slate-800/80 transition-smooth shadow-lg"
             aria-label="Toggle Shopping Cart"
           >
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
             </svg>
             {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center shadow-md animate-bounce">
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gradient-to-r from-red-600 to-amber-500 text-[10px] font-black text-white flex items-center justify-center shadow-lg animate-bounce">
                 {cartCount}
               </span>
             )}
@@ -341,18 +341,19 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <header className="relative flex-1 flex flex-col items-center justify-center px-4 py-12 md:px-6 md:py-20 text-center overflow-hidden">
-        {/* Background Gradients */}
-        <div className="absolute inset-0 z-0">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
-          <div className="absolute bottom-10 left-1/4 w-80 h-80 bg-red-600/5 rounded-full blur-[90px] pointer-events-none" />
+      <header className="relative flex-1 flex flex-col items-center justify-center px-4 py-14 md:px-6 md:py-24 text-center overflow-hidden">
+        {/* Ambient Dark Gourmet Spotlights */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[140px]" />
+          <div className="absolute bottom-10 left-1/4 w-[400px] h-[400px] bg-red-600/8 rounded-full blur-[120px]" />
+          <div className="absolute top-20 right-1/4 w-[350px] h-[350px] bg-yellow-500/8 rounded-full blur-[100px]" />
         </div>
 
         <div className="max-w-4xl mx-auto z-10 flex flex-col items-center">
           {/* Hero Section Offer Highlight Carousel */}
           {offers.length > 0 && (
             <div
-              className="w-full max-w-3xl mb-8 relative rounded-3xl overflow-hidden glass border border-amber-500/30 p-4 md:p-6 shadow-2xl shadow-amber-500/10 transition-all duration-500"
+              className="w-full max-w-3xl mb-10 relative rounded-3xl overflow-hidden glass-card p-5 md:p-6 shadow-2xl transition-all duration-500 border border-amber-500/25"
               onMouseEnter={() => setIsCarouselHovered(true)}
               onMouseLeave={() => setIsCarouselHovered(false)}
             >
@@ -364,42 +365,43 @@ export default function Home() {
                 const imageSrc = matchedDish?.image || "/malabar_biriyani.png";
 
                 return (
-                  <div key={offer.id} className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 animate-fadeIn text-left">
+                  <div key={offer.id} className="flex flex-col sm:flex-row items-center gap-5 md:gap-7 animate-fadeIn text-left">
                     {/* Product Image preview */}
-                    <div className="w-full sm:w-36 md:w-44 h-32 sm:h-32 md:h-36 relative rounded-2xl overflow-hidden bg-slate-900 shrink-0 border border-slate-800 shadow-md">
+                    <div className="w-full sm:w-40 md:w-48 h-36 sm:h-36 md:h-40 relative rounded-2xl overflow-hidden bg-slate-950 shrink-0 border border-amber-500/20 shadow-xl group">
                       {imageSrc.startsWith("/") ? (
-                        <Image src={imageSrc} alt={offer.title} fill className="object-cover" />
+                        <Image src={imageSrc} alt={offer.title} fill className="object-cover group-hover:scale-105 transition-smooth duration-500" />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={imageSrc} alt={offer.title} className="w-full h-full object-cover" />
+                        <img src={imageSrc} alt={offer.title} className="w-full h-full object-cover group-hover:scale-105 transition-smooth duration-500" />
                       )}
-                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-red-500 text-[10px] font-extrabold text-white shadow">
-                        OFFER
+                      <span className="absolute top-2.5 left-2.5 badge-crimson shadow-lg">
+                        HOT DEAL
                       </span>
                     </div>
 
                     {/* Offer text info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 flex items-center gap-1">
-                          <Fire className="w-3.5 h-3.5" weight="fill" /> {offer.discountType === 'percentage' ? `${offer.discountValue}% OFF` : `₹${offer.discountValue} OFF`}
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="badge-amber flex items-center gap-1">
+                          <Fire className="w-3.5 h-3.5 text-amber-400" weight="fill" /> 
+                          {offer.discountType === 'percentage' ? `${offer.discountValue}% OFF` : `₹${offer.discountValue} OFF`}
                         </span>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-widest font-extrabold">
                           {matchedDish ? matchedDish.name : 'Special Deal'}
                         </span>
                       </div>
-                      <h3 className="text-lg md:text-xl font-extrabold text-white leading-tight mb-1">{offer.title}</h3>
-                      <p className="text-xs md:text-sm text-slate-300 line-clamp-2">{offer.description || "Limited time deal on authentic restaurant delicacies."}</p>
+                      <h3 className="text-xl md:text-2xl font-black text-white leading-tight mb-1.5 font-heading">{offer.title}</h3>
+                      <p className="text-xs md:text-sm text-slate-300 line-clamp-2 leading-relaxed">{offer.description || "Limited time deal on authentic restaurant delicacies."}</p>
 
-                      <div className="mt-3 flex items-center justify-between">
-                        <a href="#menu" className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1">
-                          Order Deal Item
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <div className="mt-4 flex items-center justify-between">
+                        <a href="#menu" className="text-xs font-black text-amber-400 hover:text-amber-300 flex items-center gap-1.5 uppercase tracking-wider group">
+                          Order Deal Now
+                          <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                           </svg>
                         </a>
                         {offers.length > 1 && (
-                          <span className="text-[10px] text-slate-500 font-mono">
+                          <span className="text-[11px] text-amber-500/80 font-mono font-bold bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
                             {currentOfferIndex + 1} / {offers.length}
                           </span>
                         )}
@@ -411,10 +413,10 @@ export default function Home() {
 
               {/* Carousel Pagination Dots & Controls */}
               {offers.length > 1 && (
-                <div className="flex items-center justify-center gap-1.5 mt-4 pt-3 border-t border-slate-800/60">
+                <div className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-slate-800/80">
                   <button
                     onClick={() => setCurrentOfferIndex(prev => (prev - 1 + offers.length) % offers.length)}
-                    className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-smooth mr-2"
+                    className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-smooth mr-2"
                     aria-label="Previous Offer"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
@@ -424,7 +426,7 @@ export default function Home() {
                     <button
                       key={idx}
                       onClick={() => setCurrentOfferIndex(idx)}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${currentOfferIndex === idx ? 'w-6 bg-amber-400' : 'w-1.5 bg-slate-700 hover:bg-slate-500'
+                      className={`h-1.5 rounded-full transition-all duration-300 ${currentOfferIndex === idx ? 'w-7 bg-amber-400 shadow-md shadow-amber-400/50' : 'w-1.5 bg-slate-800 hover:bg-slate-600'
                         }`}
                       aria-label={`Go to slide ${idx + 1}`}
                     />
@@ -432,7 +434,7 @@ export default function Home() {
 
                   <button
                     onClick={() => setCurrentOfferIndex(prev => (prev + 1) % offers.length)}
-                    className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-smooth ml-2"
+                    className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-smooth ml-2"
                     aria-label="Next Offer"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
@@ -442,35 +444,35 @@ export default function Home() {
             </div>
           )}
 
-          <h1 className="text-3xl sm:text-4xl md:text-7xl font-extrabold text-white mb-4 md:mb-6 tracking-tight leading-tight slide-up">
-            Savor Authentic <br className="hidden md:inline" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-orange-400">
-              Malabar Delicacies
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white mb-4 md:mb-6 tracking-tight leading-tight slide-up font-heading">
+            Authentic Taste of <br className="hidden md:inline" />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-yellow-500 glow-text-amber">
+              Malabar Culinary Heritage
             </span>
           </h1>
 
-          <p className="text-sm md:text-lg text-slate-400 max-w-2xl mx-auto mb-8 md:mb-10 fade-in px-2">
-            From slow-cooked Thalassery Chicken Biriyani and juicy Tandoori grills to spicy local Kerala Beef Fry, experience the true spice legacy of Peringathur.
+          <p className="text-sm md:text-lg text-slate-300 max-w-2xl mx-auto mb-9 md:mb-11 fade-in px-2 leading-relaxed font-light">
+            Slow-cooked Thalassery Biriyani, smoked Kuzhimanthi, charred Tandoori grills, and fiery Kerala Beef Fry prepared with traditional spice craft in Peringathur.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4 fade-in">
-            <a href="#menu" className="btn-primary text-sm px-6 py-3 md:px-8 md:py-4 bg-gradient-to-tr from-amber-600 to-amber-500 shadow-amber-500/20">
+          <div className="flex flex-wrap items-center justify-center gap-4 fade-in">
+            <a href="#menu" className="btn-primary text-sm px-8 py-4 uppercase tracking-wider">
               Explore Our Menu
             </a>
-            <a href="#location" className="btn-secondary text-sm px-6 py-3 md:px-8 md:py-4">
+            <a href="#location" className="btn-secondary text-sm px-8 py-4 uppercase tracking-wider">
               Find Restaurant
             </a>
           </div>
 
-          {/* Quick Info Grid - Premium Modern Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 w-full max-w-6xl mt-12 md:mt-16 text-left">
+          {/* Quick Info Grid - Gourmet Dark Glass Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 w-full max-w-6xl mt-14 md:mt-20 text-left">
             {[
               {
                 title: "Opening Hours",
                 desc: "9:00 AM – 11:00 PM",
                 sub: "Monday – Sunday",
                 badge: "Open Daily",
-                badgeBg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                badgeBg: "badge-emerald",
                 gradient: "from-amber-500/20 to-emerald-500/20",
                 icon: (
                   <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -480,12 +482,12 @@ export default function Home() {
                 href: undefined,
               },
               {
-                title: "Call Direct Order",
+                title: "Direct Order Line",
                 desc: "+91 74477 63003",
                 sub: "Instant takeaway & delivery",
                 badge: "Call Direct",
-                badgeBg: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                gradient: "from-amber-500/20 to-orange-500/20",
+                badgeBg: "badge-amber",
+                gradient: "from-amber-500/20 to-yellow-500/20",
                 icon: (
                   <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -496,10 +498,10 @@ export default function Home() {
               {
                 title: "Dining Address",
                 desc: "Gurujimukku, Peringathur",
-                sub: "Kerala, India 670104",
-                badge: "Map View",
-                badgeBg: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-                gradient: "from-sky-500/20 to-blue-500/20",
+                sub: "Kerala, India 670675",
+                badge: "Google Map",
+                badgeBg: "px-3 py-1 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30 text-[11px] font-extrabold uppercase tracking-wider",
+                gradient: "from-sky-500/20 to-amber-500/20",
                 icon: (
                   <svg className="w-5 h-5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -510,13 +512,13 @@ export default function Home() {
               },
               {
                 title: "Fast Delivery",
-                desc: "Home & Office drop-off",
-                sub: "Peringathur & nearby areas",
+                desc: "Doorstep Delivery",
+                sub: "Peringathur & nearby zones",
                 badge: "Express 35m",
-                badgeBg: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-                gradient: "from-rose-500/20 to-amber-500/20",
+                badgeBg: "badge-crimson",
+                gradient: "from-red-500/20 to-amber-500/20",
                 icon: (
-                  <svg className="w-5 h-5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 ),
@@ -524,24 +526,24 @@ export default function Home() {
               }
             ].map((info, idx) => {
               const CardContent = (
-                <div className="group relative rounded-2xl p-5 bg-gradient-to-b from-slate-900/90 to-slate-950/90 border border-slate-800/80 hover:border-amber-500/40 backdrop-blur-xl transition-all duration-300 hover:shadow-xl hover:shadow-amber-500/5 hover:-translate-y-1 flex flex-col justify-between h-full">
+                <div className="glass-card rounded-3xl p-5 hover:-translate-y-1 transition-smooth flex flex-col justify-between h-full border border-slate-800/90 hover:border-amber-500/40">
                   <div className="flex items-start justify-between gap-3 mb-4">
-                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${info.gradient} flex items-center justify-center shrink-0 border border-slate-700/50 shadow-inner group-hover:scale-110 transition-transform duration-300`}>
+                    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${info.gradient} flex items-center justify-center shrink-0 border border-slate-700/60 shadow-inner`}>
                       {info.icon}
                     </div>
-                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border ${info.badgeBg}`}>
+                    <span className={info.badgeBg}>
                       {info.badge}
                     </span>
                   </div>
 
                   <div>
-                    <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest leading-none mb-1.5">
+                    <h4 className="text-[10px] font-extrabold text-amber-500 uppercase tracking-widest leading-none mb-1.5">
                       {info.title}
                     </h4>
-                    <p className="text-sm md:text-base font-extrabold text-white group-hover:text-amber-300 transition-colors leading-tight">
+                    <p className="text-base font-black text-white font-heading leading-tight">
                       {info.desc}
                     </p>
-                    <p className="text-xs text-slate-400/90 mt-1 font-medium">{info.sub}</p>
+                    <p className="text-xs text-slate-400 mt-1 font-medium">{info.sub}</p>
                   </div>
                 </div>
               );
@@ -561,16 +563,17 @@ export default function Home() {
       </header>
 
       {/* Menu Section */}
-      <section id="menu" className="py-16 md:py-24 px-4 md:px-12 bg-slate-950/40 relative z-10 border-t border-slate-900">
+      <section id="menu" className="py-16 md:py-24 px-4 md:px-12 relative z-10 border-t border-slate-800/60">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 mb-8 md:mb-12">
-            <div>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-white text-left">Explore Chef&apos;s Specials</h2>
-              <p className="text-sm text-slate-405 mt-2">Curated selection of our best and freshest menu items.</p>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 mb-10 md:mb-14">
+            <div className="text-left">
+              <span className="badge-amber mb-2 inline-block">Chef&apos;s Recommendations</span>
+              <h2 className="text-3xl md:text-4xl font-black text-white font-heading">Culinary Delicacies</h2>
+              <p className="text-sm text-slate-400 mt-2 font-light">Freshly cooked to order with traditional spices and pure ghee.</p>
             </div>
             {/* Filters */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-none">
               {[
                 { id: "all", label: "Full Menu" },
                 { id: "biriyani", label: "Mandi & Biriyani" },
@@ -581,9 +584,9 @@ export default function Home() {
                 <button
                   key={category.id}
                   onClick={() => setActiveCategory(category.id)}
-                  className={`px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold whitespace-nowrap transition-smooth border uppercase tracking-wider ${activeCategory === category.id
-                      ? "bg-amber-500 border-amber-500/20 text-slate-950 font-extrabold"
-                      : "glass border-slate-800 text-slate-400 hover:text-white"
+                  className={`px-4 py-2.5 rounded-2xl text-xs font-black whitespace-nowrap transition-smooth uppercase tracking-wider border ${activeCategory === category.id
+                      ? "bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 border-amber-400/50 shadow-lg shadow-amber-500/25"
+                      : "glass text-slate-300 hover:text-white hover:border-amber-500/30"
                     }`}
                 >
                   {category.label}
@@ -593,45 +596,45 @@ export default function Home() {
           </div>
 
           {/* Menu Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-7">
             {filteredDishes.map((dish) => {
               const priceInfo = getEffectivePrice(dish, offers);
               return (
                 <div
                   key={dish.id}
-                  className="glass rounded-3xl overflow-hidden hover:scale-[1.01] hover:border-slate-700/50 transition-smooth group flex flex-col"
+                  className="glass-card rounded-3xl overflow-hidden hover:scale-[1.02] transition-smooth group flex flex-col border border-slate-800/80 hover:border-amber-500/40 shadow-2xl"
                 >
                   {/* Image Container */}
-                  <div className="h-44 md:h-52 relative w-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                  <div className="h-48 md:h-56 relative w-full overflow-hidden bg-slate-950 flex items-center justify-center border-b border-slate-800/60">
                     {dish.image ? (
                       dish.image.startsWith("/") ? (
                         <Image
                           src={dish.image}
                           alt={dish.name}
                           fill
-                          className="object-cover group-hover:scale-105 transition-smooth"
+                          className="object-cover group-hover:scale-105 transition-smooth duration-500"
                         />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={dish.image} alt={dish.name} className="w-full h-full object-cover group-hover:scale-105 transition-smooth" />
+                        <img src={dish.image} alt={dish.name} className="w-full h-full object-cover group-hover:scale-105 transition-smooth duration-500" />
                       )
                     ) : (
-                      <div className="absolute inset-0 bg-gradient-to-tr from-slate-900 to-slate-800 flex items-center justify-center p-6 text-center">
-                        <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-amber-500/60 mb-2 border border-slate-700/20">
-                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6 text-center">
+                        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400 mb-2 border border-amber-500/20 shadow-inner">
+                          <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                           </svg>
                         </div>
-                        <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">ABR Asma Specialties</span>
+                        <span className="text-[10px] text-amber-500/70 uppercase tracking-widest font-extrabold">ABR Asma Specialties</span>
                       </div>
                     )}
                     {/* Category Tag */}
-                    <span className="absolute top-4 left-4 px-3 py-1.5 rounded-lg bg-slate-950/80 backdrop-blur-md text-[10px] uppercase font-bold tracking-wider text-amber-500 border border-slate-800">
+                    <span className="absolute top-4 left-4 badge-amber uppercase shadow-lg">
                       {dish.category}
                     </span>
                     {/* Offer Badge */}
                     {priceInfo.offerTitle && (
-                      <span className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-red-500/90 backdrop-blur-md text-[10px] uppercase font-bold tracking-wider text-white">
+                      <span className="absolute top-4 right-4 badge-crimson shadow-lg">
                         {offers.find(o => o.title === priceInfo.offerTitle)?.discountType === 'percentage'
                           ? `${offers.find(o => o.title === priceInfo.offerTitle)?.discountValue}% OFF`
                           : `₹${offers.find(o => o.title === priceInfo.offerTitle)?.discountValue} OFF`
@@ -641,32 +644,32 @@ export default function Home() {
                   </div>
 
                   {/* Details */}
-                  <div className="p-5 md:p-6 flex-1 flex flex-col justify-between text-left">
+                  <div className="p-6 md:p-7 flex-1 flex flex-col justify-between text-left">
                     <div>
-                      <div className="flex justify-between items-start gap-4 mb-2">
-                        <h3 className="font-bold text-white text-base md:text-lg group-hover:text-amber-400 transition-smooth">{dish.name}</h3>
+                      <div className="flex justify-between items-start gap-4 mb-2.5">
+                        <h3 className="font-black text-white text-lg md:text-xl font-heading group-hover:text-amber-400 transition-smooth">{dish.name}</h3>
                         <div className="text-right shrink-0">
                           {priceInfo.originalPrice ? (
                             <>
-                              <span className="text-slate-500 line-through text-sm mr-1.5">₹{priceInfo.originalPrice.toFixed(2)}</span>
-                              <span className="text-amber-400 font-extrabold text-lg">₹{priceInfo.price.toFixed(2)}</span>
+                              <span className="text-slate-500 line-through text-xs mr-1.5 font-bold">₹{priceInfo.originalPrice.toFixed(2)}</span>
+                              <span className="text-amber-400 font-black text-xl font-heading">₹{priceInfo.price.toFixed(2)}</span>
                             </>
                           ) : (
-                            <span className="text-amber-400 font-extrabold text-lg">₹{priceInfo.price.toFixed(2)}</span>
+                            <span className="text-amber-400 font-black text-xl font-heading">₹{priceInfo.price.toFixed(2)}</span>
                           )}
                         </div>
                       </div>
-                      <p className="text-slate-400 text-sm leading-relaxed mb-4 md:mb-6 line-clamp-3">{dish.description}</p>
+                      <p className="text-slate-300 text-sm leading-relaxed mb-6 font-light line-clamp-3">{dish.description}</p>
                     </div>
 
                     <button
                       onClick={() => handleAddToCart(dish)}
-                      className="w-full btn-secondary text-sm font-semibold flex items-center justify-center gap-2 group-hover:bg-amber-500 group-hover:text-slate-900 group-hover:border-transparent transition-smooth"
+                      className="w-full btn-primary text-xs uppercase tracking-wider py-3.5"
                     >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                       </svg>
-                      Add to Cart
+                      Add to Cart Basket
                     </button>
                   </div>
                 </div>
@@ -677,22 +680,23 @@ export default function Home() {
       </section>
 
       {/* Info & Reviews Split Section */}
-      <section id="reviews" className="py-16 md:py-24 px-4 md:px-12 bg-slate-950/80 border-t border-slate-900 relative z-10">
+      <section id="reviews" className="py-16 md:py-24 px-4 md:px-12 relative z-10 border-t border-slate-800/60">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
           {/* Reviews List */}
           <div className="lg:col-span-7 flex flex-col text-left">
-            <div className="flex items-center justify-between gap-4 mb-8">
+            <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
               <div>
-                <h2 className="text-2xl md:text-3xl font-extrabold text-white">Google Guest Reviews</h2>
+                <span className="badge-amber mb-2 inline-block">Guest Feedback</span>
+                <h2 className="text-3xl font-black text-white font-heading">Google Guest Reviews</h2>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="text-sm font-bold text-amber-400">3.7 out of 5 stars</span>
+                  <span className="text-sm font-black text-amber-400">3.7 out of 5 stars</span>
                   <div className="flex items-center text-amber-400 gap-0.5">
                     {Array.from({ length: 4 }).map((_, i) => (
-                      <span key={i}><Star className="w-3.5 h-3.5" weight="fill" /></span>
+                      <span key={i}><Star className="w-4 h-4" weight="fill" /></span>
                     ))}
-                    <span className="text-slate-600"><Star className="w-3.5 h-3.5" weight="fill" /></span>
+                    <span className="text-slate-700"><Star className="w-4 h-4" weight="fill" /></span>
                   </div>
-                  <span className="text-xs text-slate-500 font-medium">({INITIAL_REVIEWS.length} reviews)</span>
+                  <span className="text-xs text-slate-400 font-medium">({INITIAL_REVIEWS.length} reviews)</span>
                 </div>
               </div>
 
@@ -701,10 +705,10 @@ export default function Home() {
                   href={BUSINESS_PROFILE.googleReviewUrl || BUSINESS_PROFILE.googleMapsUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="btn-primary text-xs py-2 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
+                  className="btn-primary text-xs py-3 px-5 uppercase tracking-wider flex items-center gap-2"
                 >
-                  <span>Leave a Google Review</span>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <span>Leave Google Review</span>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
                 </a>
@@ -712,21 +716,21 @@ export default function Home() {
             </div>
 
             {/* Reviews List */}
-            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-none">
               {INITIAL_REVIEWS.map((rev) => (
-                <div key={rev.id} className="glass p-5 rounded-2xl border-slate-800 flex flex-col gap-3">
+                <div key={rev.id} className="glass-card p-6 rounded-3xl border border-slate-800/80 flex flex-col gap-3">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="font-extrabold text-sm text-white">{rev.author}</span>
-                      <span className="text-[10px] text-slate-500 ml-2 font-semibold uppercase">{rev.date}</span>
+                      <span className="font-black text-base text-white font-heading">{rev.author}</span>
+                      <span className="text-[10px] text-amber-500/80 ml-2 font-bold uppercase tracking-wider">{rev.date}</span>
                     </div>
-                    <div className="flex items-center text-amber-500 text-xs">
+                    <div className="flex items-center text-amber-400 text-xs">
                       {Array.from({ length: 5 }).map((_, i) => (
-                        <span key={i} className={i < rev.rating ? "text-amber-500" : "text-slate-800"}><Star className="w-3.5 h-3.5" weight="fill" /></span>
+                        <span key={i} className={i < rev.rating ? "text-amber-400" : "text-slate-800"}><Star className="w-3.5 h-3.5" weight="fill" /></span>
                       ))}
                     </div>
                   </div>
-                  <p className="text-[13px] text-slate-400 leading-relaxed font-light">{rev.comment}</p>
+                  <p className="text-sm text-slate-300 leading-relaxed font-light">{rev.comment}</p>
                 </div>
               ))}
             </div>
@@ -738,16 +742,17 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 md:py-12 text-center text-slate-500 border-t border-slate-900 bg-slate-950/60 text-xs px-4">
-        <p className="mb-2">ABR Asma Restaurant &copy; {new Date().getFullYear()} – Traditional Taste of Malabar.</p>
-        <p className="text-slate-600/80">Powered by Next.js and integrated with OrderFlow Dashboard.</p>
+      <footer className="py-10 text-center text-slate-400 border-t border-slate-800/60 text-xs px-4">
+        <p className="mb-2 font-medium">ABR Asma Restaurant &copy; {new Date().getFullYear()} – Traditional Taste of Malabar.</p>
+        <p className="text-slate-500">Gurujimukku, Peringathur, Kerala 670675 • Phone: +91 74477 63003</p>
       </footer>
+
 
       {/* Floating Cart Button (mobile) */}
       {cartCount > 0 && !isCartOpen && !isCheckoutOpen && (
         <button
           onClick={() => setIsCartOpen(true)}
-          className="fixed bottom-6 right-6 z-40 bg-amber-500 text-slate-950 p-4 rounded-full shadow-2xl flex items-center justify-center gap-2 hover:bg-amber-400 transition-smooth font-extrabold"
+          className="fixed bottom-6 right-6 z-40 bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-500 text-slate-950 p-4 rounded-full shadow-2xl flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-smooth font-black border border-amber-400/40 glow-amber"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -758,22 +763,22 @@ export default function Home() {
 
       {/* Cart Drawer — Only shows products + quantity */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/80 backdrop-blur-md animate-fadeIn">
           <div className="absolute inset-0 -z-10" onClick={() => setIsCartOpen(false)} />
 
-          <div className="w-full max-w-md bg-slate-900 border-l border-slate-800/80 p-6 flex flex-col justify-between shadow-2xl relative animate-slideLeft h-full overflow-y-auto">
+          <div className="w-full max-w-md bg-[#0d0f14]/95 border-l border-amber-500/20 p-6 flex flex-col justify-between shadow-2xl relative animate-slideLeft h-full overflow-y-auto backdrop-blur-2xl">
             <div>
               {/* Header */}
-              <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-white text-lg text-left">Your Order Basket</h3>
-                  <span className="text-xs bg-slate-800 px-2 py-1 rounded text-amber-500 font-bold">{cartCount} items</span>
+              <div className="flex justify-between items-center border-b border-slate-800/80 pb-4 mb-6">
+                <div className="flex items-center gap-2.5">
+                  <h3 className="font-black text-white text-lg font-heading text-left">Your Order Basket</h3>
+                  <span className="badge-amber">{cartCount} items</span>
                 </div>
                 <button
                   onClick={() => setIsCartOpen(false)}
-                  className="p-1 text-slate-450 hover:text-white rounded-lg transition-smooth"
+                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800/80 transition-smooth"
                 >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -781,29 +786,31 @@ export default function Home() {
 
               {/* Items List */}
               {cart.length === 0 ? (
-                <div className="text-center py-20 text-slate-500">
-                  <svg className="w-12 h-12 mx-auto mb-4 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                  </svg>
-                  <p className="text-sm font-semibold">Your basket is empty</p>
-                  <p className="text-xs mt-1">Explore our specials and add dishes to begin.</p>
+                <div className="text-center py-24 text-slate-500">
+                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 text-amber-400">
+                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
+                  </div>
+                  <p className="text-base font-bold text-slate-300 font-heading">Your basket is empty</p>
+                  <p className="text-xs mt-1 text-slate-500">Explore our chef specials and add dishes to order.</p>
                 </div>
               ) : (
-                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1 scrollbar-none">
                   {cart.map((item) => {
                     const priceInfo = getEffectivePrice(item.dish, offers);
                     return (
-                      <div key={item.dish.id} className="flex justify-between items-center py-3 border-b border-slate-800/40">
-                        <div className="text-left max-w-[200px]">
-                          <h4 className="font-bold text-sm text-white">{item.dish.name}</h4>
+                      <div key={item.dish.id} className="flex justify-between items-center py-3.5 border-b border-slate-800/60">
+                        <div className="text-left max-w-[210px]">
+                          <h4 className="font-black text-sm text-white font-heading">{item.dish.name}</h4>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             {priceInfo.originalPrice ? (
                               <>
-                                <span className="text-[10px] text-slate-500 line-through">₹{priceInfo.originalPrice.toFixed(2)}</span>
-                                <span className="text-xs text-amber-400 font-medium">₹{priceInfo.price.toFixed(2)}</span>
+                                <span className="text-[10px] text-slate-500 line-through font-bold">₹{priceInfo.originalPrice.toFixed(2)}</span>
+                                <span className="text-xs text-amber-400 font-extrabold">₹{priceInfo.price.toFixed(2)}</span>
                               </>
                             ) : (
-                              <span className="text-xs text-amber-400 font-medium">₹{priceInfo.price.toFixed(2)}</span>
+                              <span className="text-xs text-amber-400 font-extrabold">₹{priceInfo.price.toFixed(2)}</span>
                             )}
                           </div>
                         </div>
@@ -812,14 +819,14 @@ export default function Home() {
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => handleUpdateQty(item.dish.id, -1)}
-                            className="w-11 h-11 rounded-lg bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
+                            className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 hover:bg-amber-500 hover:text-slate-950 font-black transition-smooth"
                           >
                             -
                           </button>
-                          <span className="text-sm font-extrabold text-white w-4 text-center">{item.quantity}</span>
+                          <span className="text-sm font-black text-white w-4 text-center">{item.quantity}</span>
                           <button
                             onClick={() => handleUpdateQty(item.dish.id, 1)}
-                            className="w-11 h-11 rounded-lg bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
+                            className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-300 hover:bg-amber-500 hover:text-slate-950 font-black transition-smooth"
                           >
                             +
                           </button>
@@ -833,20 +840,20 @@ export default function Home() {
 
             {/* Proceed to Checkout Button */}
             {cart.length > 0 && (
-              <div className="border-t border-slate-800 pt-4 mt-6">
+              <div className="border-t border-slate-800/80 pt-4 mt-6">
                 {/* Coupon Section */}
                 <div className="mb-4">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Have a Coupon?</label>
+                  <label className="block text-[10px] font-extrabold text-amber-500 uppercase tracking-widest mb-1.5">Have a Promo Coupon?</label>
                   {appliedCoupon ? (
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm">🎟️</span>
+                        <span className="text-base">🎟️</span>
                         <div>
-                          <span className="font-extrabold text-xs text-amber-400 font-mono">{appliedCoupon.coupon.code}</span>
-                          <p className="text-[10px] text-green-400 font-semibold">Saved ₹{appliedCoupon.discountAmount.toFixed(2)}</p>
+                          <span className="font-black text-xs text-amber-400 font-mono">{appliedCoupon.coupon.code}</span>
+                          <p className="text-[10px] text-emerald-400 font-extrabold">Saved ₹{appliedCoupon.discountAmount.toFixed(2)}</p>
                         </div>
                       </div>
-                      <button onClick={handleRemoveCoupon} className="text-xs text-slate-400 hover:text-red-400 px-2 py-1 rounded hover:bg-red-500/10">
+                      <button onClick={handleRemoveCoupon} className="text-xs text-slate-400 hover:text-red-400 px-2 py-1 rounded-lg hover:bg-red-500/10 transition-smooth">
                         Remove
                       </button>
                     </div>
@@ -854,42 +861,42 @@ export default function Home() {
                     <form onSubmit={handleApplyCoupon} className="flex gap-2">
                       <input
                         type="text"
-                        placeholder="e.g. WELCOME10"
+                        placeholder="PROMO CODE"
                         value={couponInput}
                         onChange={e => setCouponInput(e.target.value.toUpperCase())}
-                        className="px-3 py-2 text-xs font-mono tracking-wider uppercase flex-1 bg-slate-950 border border-slate-800 rounded-xl text-white"
+                        className="px-3.5 py-2.5 text-xs font-mono tracking-wider uppercase flex-1 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-amber-500"
                       />
-                      <button type="submit" className="px-3 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-smooth">
+                      <button type="submit" className="px-4 py-2.5 bg-amber-500 text-slate-950 font-black rounded-xl text-xs hover:bg-amber-400 transition-smooth">
                         Apply
                       </button>
                     </form>
                   )}
-                  {couponError && <p className="text-[10px] text-red-400 mt-1.5">{couponError}</p>}
-                  {couponSuccess && <p className="text-[10px] text-green-400 mt-1.5">{couponSuccess}</p>}
+                  {couponError && <p className="text-[10px] text-red-400 mt-1.5 font-bold">{couponError}</p>}
+                  {couponSuccess && <p className="text-[10px] text-emerald-400 mt-1.5 font-bold">{couponSuccess}</p>}
                 </div>
 
-                <div className="space-y-1.5 mb-4 border-t border-slate-800/80 pt-3">
+                <div className="space-y-2 mb-5 border-t border-slate-800/80 pt-4">
                   <div className="flex justify-between items-center text-xs text-slate-400">
                     <span>Subtotal</span>
-                    <span>₹{cartSubtotal.toFixed(2)}</span>
+                    <span className="font-bold">₹{cartSubtotal.toFixed(2)}</span>
                   </div>
                   {appliedCoupon && (
-                    <div className="flex justify-between items-center text-xs text-green-400 font-semibold">
-                      <span>Coupon ({appliedCoupon.coupon.code})</span>
+                    <div className="flex justify-between items-center text-xs text-emerald-400 font-bold">
+                      <span>Coupon Discount</span>
                       <span>-₹{appliedCoupon.discountAmount.toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center text-base font-extrabold text-white pt-2 border-t border-slate-800">
+                  <div className="flex justify-between items-center text-lg font-black text-white pt-2.5 border-t border-slate-800 font-heading">
                     <span>Total Bill</span>
-                    <span className="text-amber-500">₹{cartFinalTotal.toFixed(2)}</span>
+                    <span className="text-amber-400">₹{cartFinalTotal.toFixed(2)}</span>
                   </div>
                 </div>
 
                 <button
                   onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                  className="w-full btn-primary text-xs uppercase tracking-wider py-4"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                   Proceed to Checkout
@@ -902,19 +909,19 @@ export default function Home() {
 
       {/* Checkout Modal — Name + Phone Number */}
       {isCheckoutOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-lg glass rounded-3xl p-6 md:p-8 border-amber-500/20 relative animate-scaleUp">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-lg glass-card rounded-3xl p-6 md:p-8 border border-amber-500/25 relative animate-scaleUp shadow-2xl">
             {/* Close */}
             <button
               onClick={() => setIsCheckoutOpen(false)}
-              className="absolute top-3 right-3 p-3 text-slate-400 hover:text-white rounded-lg transition-smooth"
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-xl transition-smooth"
               aria-label="Close Checkout Modal"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-xl font-extrabold text-white mb-1">Checkout</h3>
-            <p className="text-sm text-slate-400 mb-6">Complete your order details to place via WhatsApp</p>
+            <h3 className="text-2xl font-black text-white mb-1 font-heading">Complete Order Details</h3>
+            <p className="text-xs text-slate-400 mb-6">Enter details to dispatch via WhatsApp to ABR Asma counter</p>
 
             {/* Order Summary */}
             <div className="glass rounded-2xl p-4 mb-6 border border-slate-800 max-h-56 overflow-y-auto">
