@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import { BUSINESS_PROFILE, Review, INITIAL_REVIEWS } from "@/lib/restaurant-data";
+import { BUSINESS_PROFILE, INITIAL_REVIEWS } from "@/lib/restaurant-data";
 
 export default function RestaurantProfile() {
   const profile = BUSINESS_PROFILE;

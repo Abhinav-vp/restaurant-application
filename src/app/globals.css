@@ -191,3 +191,13 @@ input, select, textarea {
 .btn-danger {
   @apply btn bg-danger/10 text-danger hover:bg-danger/20 border border-danger/20;
 }
+
+/* Floating Action Buttons */
+.fab-whatsapp {
+  @apply w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 hover:scale-110 active:scale-95 transition-smooth border border-emerald-400/40;
+}
+
+.fab-call {
+  @apply w-12 h-12 md:w-14 md:h-14 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/30 hover:scale-110 active:scale-95 transition-smooth border border-amber-400/40;
+}
+

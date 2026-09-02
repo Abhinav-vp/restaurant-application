@@ -298,6 +298,44 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     { id: 'coupons' as const, label: 'Coupons', icon: '🎟️', count: coupons.length },
   ];
 
+  // Image File Upload Helper
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const maxDim = 400;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+          setFormData(prev => ({ ...prev, image: dataUrl }));
+        }
+      };
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="min-h-screen">
       {/* Top Bar */}
@@ -379,8 +417,27 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Image URL (optional)</label>
-                    <input value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} placeholder="/image.png or https://..." className="text-sm" />
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Image Upload / URL</label>
+                    <div className="flex gap-2 items-center">
+                      <label className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-xl cursor-pointer border border-slate-700 whitespace-nowrap transition-smooth">
+                        📁 Upload Image
+                        <input type="file" accept="image/*" onChange={handleImageFileChange} className="hidden" />
+                      </label>
+                      <input 
+                        value={formData.image} 
+                        onChange={e => setFormData({...formData, image: e.target.value})} 
+                        placeholder="Or enter image URL..." 
+                        className="text-xs flex-1" 
+                      />
+                    </div>
+                    {formData.image && (
+                      <div className="mt-2 flex items-center gap-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={formData.image} alt="Preview" className="w-10 h-10 object-cover rounded-lg border border-slate-700" />
+                        <span className="text-[10px] text-green-400 font-semibold">✓ Image set</span>
+                        <button type="button" onClick={() => setFormData({...formData, image: ''})} className="text-[10px] text-slate-400 hover:text-red-400 ml-auto">Clear</button>
+                      </div>
+                    )}
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Description</label>
@@ -402,22 +459,40 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
             {/* Menu Items Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {menuItems.map(item => (
-                <div key={item.id} className="glass rounded-2xl p-5 border border-slate-800 hover:border-slate-700/60 transition-smooth group">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-white text-sm truncate">{item.name}</h4>
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-amber-500/80">{item.category}</span>
-                    </div>
-                    <span className="text-amber-400 font-extrabold text-lg ml-2">₹{item.price.toFixed(2)}</span>
+                <div key={item.id} className="glass rounded-2xl overflow-hidden border border-slate-800 hover:border-slate-700/60 transition-smooth group flex flex-col">
+                  {/* Thumbnail Image display */}
+                  <div className="h-36 w-full relative bg-slate-900 overflow-hidden flex items-center justify-center border-b border-slate-800">
+                    {item.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-smooth" />
+                    ) : (
+                      <div className="text-center p-4">
+                        <span className="text-2xl">🍲</span>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">No Image</p>
+                      </div>
+                    )}
+                    <span className="absolute top-2 left-2 px-2.5 py-1 rounded-md bg-slate-950/80 backdrop-blur-md text-[9px] uppercase font-bold text-amber-400 border border-slate-800">
+                      {item.category}
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-400 line-clamp-2 mb-4">{item.description}</p>
-                  <div className="flex items-center gap-2 pt-3 border-t border-slate-800/40">
-                    <button onClick={() => handleEditItem(item.id)} className="flex-1 text-center text-xs font-bold text-slate-300 hover:text-amber-400 py-2 rounded-lg hover:bg-slate-800/50 transition-smooth">
-                      ✏️ Edit
-                    </button>
-                    <button onClick={() => handleDeleteItem(item.id)} className="flex-1 text-center text-xs font-bold text-slate-400 hover:text-red-400 py-2 rounded-lg hover:bg-red-500/10 transition-smooth">
-                      🗑️ Delete
-                    </button>
+
+                  <div className="p-5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between mb-1.5">
+                        <h4 className="font-bold text-white text-sm truncate flex-1">{item.name}</h4>
+                        <span className="text-amber-400 font-extrabold text-base ml-2">₹{item.price.toFixed(2)}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 line-clamp-2 mb-4">{item.description}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-3 border-t border-slate-800/40">
+                      <button onClick={() => handleEditItem(item.id)} className="flex-1 text-center text-xs font-bold text-slate-300 hover:text-amber-400 py-2 rounded-lg hover:bg-slate-800/50 transition-smooth">
+                        ✏️ Edit
+                      </button>
+                      <button onClick={() => handleDeleteItem(item.id)} className="flex-1 text-center text-xs font-bold text-slate-400 hover:text-red-400 py-2 rounded-lg hover:bg-red-500/10 transition-smooth">
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

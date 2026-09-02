@@ -138,9 +138,44 @@ export default function Home() {
   const cartDiscount = appliedCoupon ? appliedCoupon.discountAmount : 0;
   const cartFinalTotal = Math.max(0, cartSubtotal - cartDiscount);
 
+  // Carousel State
+  const [currentOfferIndex, setCurrentOfferIndex] = useState(0);
+  const [isCarouselHovered, setIsCarouselHovered] = useState(false);
+
+  // Phone Validation State
+  const [phoneTouched, setPhoneTouched] = useState(false);
+
+  // Auto-rotate hero offers carousel
+  useEffect(() => {
+    if (offers.length <= 1 || isCarouselHovered) return;
+    const interval = setInterval(() => {
+      setCurrentOfferIndex(prev => (prev + 1) % offers.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [offers.length, isCarouselHovered]);
+
+  // Phone Validation Helper
+  const validatePhone = (phone: string): { isValid: boolean; message: string } => {
+    const clean = phone.replace(/[\s-]/g, '');
+    if (!clean) return { isValid: false, message: "Phone number is required" };
+    const indianMobileRegex = /^(?:\+?91)?[6-9]\d{9}$/;
+    if (!indianMobileRegex.test(clean)) {
+      return { isValid: false, message: "Please enter a valid 10-digit mobile number (e.g., 9876543210)" };
+    }
+    return { isValid: true, message: "" };
+  };
+
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
+
+    const phoneVal = validatePhone(customerPhone);
+    if (!phoneVal.isValid) {
+      setPhoneTouched(true);
+      setOrderError(phoneVal.message);
+      return;
+    }
+
     setIsOrdering(true);
     setOrderError("");
 
@@ -150,13 +185,27 @@ export default function Home() {
     const couponInfo = appliedCoupon ? ` (Coupon ${appliedCoupon.coupon.code}: -₹${cartDiscount.toFixed(2)})` : '';
     const fullItemsDescription = `${itemListString}${couponInfo}`;
 
+    const itemDetails = cart.map(item => {
+      const priceInfo = getEffectivePrice(item.dish, offers);
+      return {
+        name: item.dish.name,
+        quantity: item.quantity,
+        unitPrice: priceInfo.price,
+        lineTotal: parseFloat((priceInfo.price * item.quantity).toFixed(2)),
+      };
+    });
+
     try {
-      // Save enquiry to localStorage
+      // Save enquiry to localStorage with structured details
       saveEnquiry({
         id: `enq-${Date.now()}`,
         customerName,
         customerPhone,
         items: fullItemsDescription,
+        itemDetails,
+        couponCode: appliedCoupon?.coupon.code,
+        couponDiscount: appliedCoupon ? cartDiscount : undefined,
+        subtotalPrice: parseFloat(cartSubtotal.toFixed(2)),
         totalQuantity,
         totalPrice: parseFloat(cartFinalTotal.toFixed(2)),
         createdAt: new Date().toISOString(),
@@ -192,15 +241,16 @@ export default function Home() {
       setCart([]);
       setCustomerName("");
       setCustomerPhone("");
+      setPhoneTouched(false);
       setAppliedCoupon(null);
       setCouponInput("");
       setCouponError("");
       setCouponSuccess("");
       setIsCartOpen(false);
       setIsCheckoutOpen(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setOrderError(err.message || "Failed to place order. Please try again.");
+      setOrderError((err as Error)?.message || "Failed to place order. Please try again.");
     } finally {
       setIsOrdering(false);
     }
@@ -254,21 +304,97 @@ export default function Home() {
         </div>
 
         <div className="max-w-4xl mx-auto z-10 flex flex-col items-center">
-          {/* Active Offers Banner */}
+          {/* Hero Section Offer Highlight Carousel */}
           {offers.length > 0 && (
-            <div className="w-full max-w-2xl mb-8 space-y-3">
-              {offers.map(offer => (
-                <div key={offer.id} className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500/15 to-orange-500/10 border border-amber-500/25 backdrop-blur-sm animate-fadeIn">
-                  <span className="text-xl">🔥</span>
-                  <div className="flex-1 text-left">
-                    <span className="text-sm font-extrabold text-amber-400">{offer.title}</span>
-                    {offer.description && <span className="text-xs text-slate-400 ml-2">{offer.description}</span>}
+            <div 
+              className="w-full max-w-3xl mb-8 relative rounded-3xl overflow-hidden glass border border-amber-500/30 p-4 md:p-6 shadow-2xl shadow-amber-500/10 transition-all duration-500"
+              onMouseEnter={() => setIsCarouselHovered(true)}
+              onMouseLeave={() => setIsCarouselHovered(false)}
+            >
+              {(() => {
+                const offer = offers[currentOfferIndex] || offers[0];
+                const matchedDish = offer.applicableProducts && offer.applicableProducts.length > 0
+                  ? menuItems.find(item => offer.applicableProducts.includes(item.id))
+                  : menuItems[0];
+                const imageSrc = matchedDish?.image || "/malabar_biriyani.png";
+
+                return (
+                  <div key={offer.id} className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 animate-fadeIn text-left">
+                    {/* Product Image preview */}
+                    <div className="w-full sm:w-36 md:w-44 h-32 sm:h-32 md:h-36 relative rounded-2xl overflow-hidden bg-slate-900 shrink-0 border border-slate-800 shadow-md">
+                      {imageSrc.startsWith("/") ? (
+                        <Image src={imageSrc} alt={offer.title} fill className="object-cover" />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={imageSrc} alt={offer.title} className="w-full h-full object-cover" />
+                      )}
+                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-red-500 text-[10px] font-extrabold text-white shadow">
+                        OFFER
+                      </span>
+                    </div>
+
+                    {/* Offer text info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                          🔥 {offer.discountType === 'percentage' ? `${offer.discountValue}% OFF` : `₹${offer.discountValue} OFF`}
+                        </span>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
+                          {matchedDish ? matchedDish.name : 'Special Deal'}
+                        </span>
+                      </div>
+                      <h3 className="text-lg md:text-xl font-extrabold text-white leading-tight mb-1">{offer.title}</h3>
+                      <p className="text-xs md:text-sm text-slate-300 line-clamp-2">{offer.description || "Limited time deal on authentic restaurant delicacies."}</p>
+
+                      <div className="mt-3 flex items-center justify-between">
+                        <a href="#menu" className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1">
+                          Order Deal Item
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                          </svg>
+                        </a>
+                        {offers.length > 1 && (
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            {currentOfferIndex + 1} / {offers.length}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full whitespace-nowrap">
-                    {offer.discountType === 'percentage' ? `${offer.discountValue}% OFF` : `₹${offer.discountValue} OFF`}
-                  </span>
+                );
+              })()}
+
+              {/* Carousel Pagination Dots & Controls */}
+              {offers.length > 1 && (
+                <div className="flex items-center justify-center gap-1.5 mt-4 pt-3 border-t border-slate-800/60">
+                  <button
+                    onClick={() => setCurrentOfferIndex(prev => (prev - 1 + offers.length) % offers.length)}
+                    className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-smooth mr-2"
+                    aria-label="Previous Offer"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                  </button>
+
+                  {offers.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentOfferIndex(idx)}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        currentOfferIndex === idx ? 'w-6 bg-amber-400' : 'w-1.5 bg-slate-700 hover:bg-slate-500'
+                      }`}
+                      aria-label={`Go to slide ${idx + 1}`}
+                    />
+                  ))}
+
+                  <button
+                    onClick={() => setCurrentOfferIndex(prev => (prev + 1) % offers.length)}
+                    className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-slate-800 transition-smooth ml-2"
+                    aria-label="Next Offer"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
           )}
 
@@ -292,62 +418,100 @@ export default function Home() {
             </a>
           </div>
 
-          {/* Quick Info Grid - Responsive */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 w-full max-w-5xl mt-10 md:mt-16 text-left">
+          {/* Quick Info Grid - Premium Modern Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 w-full max-w-6xl mt-12 md:mt-16 text-left">
             {[
               {
                 title: "Opening Hours",
                 desc: "9:00 AM – 11:00 PM",
                 sub: "Monday – Sunday",
+                badge: "Open Daily",
+                badgeBg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                gradient: "from-amber-500/20 to-emerald-500/20",
                 icon: (
-                  <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                )
+                ),
+                href: undefined,
               },
               {
                 title: "Call Direct Order",
                 desc: "+91 74477 63003",
-                sub: "Instant takeaway/delivery",
+                sub: "Instant takeaway & delivery",
+                badge: "Call Direct",
+                badgeBg: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                gradient: "from-amber-500/20 to-orange-500/20",
                 icon: (
-                  <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
-                )
+                ),
+                href: "tel:+917447763003",
               },
               {
                 title: "Dining Address",
                 desc: "Gurujimukku, Peringathur",
                 sub: "Kerala, India 670104",
+                badge: "Map View",
+                badgeBg: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+                gradient: "from-sky-500/20 to-blue-500/20",
                 icon: (
-                  <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="w-5 h-5 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                )
+                ),
+                href: "#location",
               },
               {
                 title: "Fast Delivery",
                 desc: "Home & Office drop-off",
                 sub: "Peringathur & nearby areas",
+                badge: "Express 35m",
+                badgeBg: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+                gradient: "from-rose-500/20 to-amber-500/20",
                 icon: (
-                  <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  <svg className="w-5 h-5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                )
+                ),
+                href: "#menu",
               }
-            ].map((info, idx) => (
-              <div key={idx} className="glass rounded-2xl p-4 md:p-5 hover:scale-[1.01] transition-smooth border border-slate-800 hover:border-slate-700/60 flex items-start gap-3 md:gap-4">
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-slate-800/80 flex items-center justify-center flex-shrink-0 border border-slate-700/40">
-                  {info.icon}
+            ].map((info, idx) => {
+              const CardContent = (
+                <div className="group relative rounded-2xl p-5 bg-gradient-to-b from-slate-900/90 to-slate-950/90 border border-slate-800/80 hover:border-amber-500/40 backdrop-blur-xl transition-all duration-300 hover:shadow-xl hover:shadow-amber-500/5 hover:-translate-y-1 flex flex-col justify-between h-full">
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${info.gradient} flex items-center justify-center shrink-0 border border-slate-700/50 shadow-inner group-hover:scale-110 transition-transform duration-300`}>
+                      {info.icon}
+                    </div>
+                    <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border ${info.badgeBg}`}>
+                      {info.badge}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest leading-none mb-1.5">
+                      {info.title}
+                    </h4>
+                    <p className="text-sm md:text-base font-extrabold text-white group-hover:text-amber-300 transition-colors leading-tight">
+                      {info.desc}
+                    </p>
+                    <p className="text-xs text-slate-400/90 mt-1 font-medium">{info.sub}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <h4 className="text-[10px] md:text-xs font-semibold text-slate-500 uppercase tracking-widest leading-none mb-1 md:mb-1.5">{info.title}</h4>
-                  <p className="text-xs md:text-sm font-bold text-white leading-tight">{info.desc}</p>
-                  <p className="text-[10px] md:text-[11px] text-slate-400/80 mt-0.5 md:mt-1">{info.sub}</p>
+              );
+
+              return info.href ? (
+                <a key={idx} href={info.href} className="block h-full">
+                  {CardContent}
+                </a>
+              ) : (
+                <div key={idx} className="h-full">
+                  {CardContent}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </header>
@@ -763,16 +927,36 @@ export default function Home() {
                 <input 
                   type="tel" 
                   required
-                  placeholder="+91 XXXXX XXXXX"
+                  placeholder="10-digit Mobile Number (e.g. 8113021038)"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="px-4 py-3 text-sm"
+                  onChange={(e) => {
+                    setCustomerPhone(e.target.value);
+                    if (!phoneTouched) setPhoneTouched(true);
+                  }}
+                  onBlur={() => setPhoneTouched(true)}
+                  className={`px-4 py-3 text-sm ${
+                    phoneTouched && customerPhone && !validatePhone(customerPhone).isValid
+                      ? "border-red-500 focus:ring-red-500/50"
+                      : phoneTouched && customerPhone && validatePhone(customerPhone).isValid
+                      ? "border-green-500 focus:ring-green-500/50"
+                      : ""
+                  }`}
                 />
+                {phoneTouched && customerPhone && !validatePhone(customerPhone).isValid && (
+                  <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {validatePhone(customerPhone).message}
+                  </p>
+                )}
+                {phoneTouched && customerPhone && validatePhone(customerPhone).isValid && (
+                  <p className="text-[10px] text-green-400 mt-1 flex items-center gap-1">
+                    <span>✓</span> Valid Indian mobile number
+                  </p>
+                )}
               </div>
 
               <button 
                 type="submit" 
-                disabled={isOrdering}
+                disabled={isOrdering || (phoneTouched && !validatePhone(customerPhone).isValid)}
                 className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm border-transparent select-none mt-2 hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isOrdering ? (
@@ -838,6 +1022,33 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Floating WhatsApp & Call Buttons */}
+      <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3 group">
+        <a 
+          href="https://wa.me/918113021038" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="fab-whatsapp"
+          title="Chat on WhatsApp (+91 8113021038)"
+          aria-label="Contact on WhatsApp"
+        >
+          <svg className="w-6 h-6 md:w-7 md:h-7 fill-current" viewBox="0 0 24 24">
+            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.301-.15-1.785-.881-2.062-.982-.276-.101-.477-.15-.678.15-.201.301-.778.982-.954 1.183-.175.201-.351.226-.652.076-.301-.15-1.27-.468-2.42-1.494-.897-.8-1.502-1.788-1.678-2.089-.175-.301-.019-.464.131-.614.136-.135.301-.351.452-.527.15-.176.201-.301.301-.502.101-.201.05-.377-.025-.527-.075-.15-.678-1.635-.929-2.235-.244-.585-.494-.506-.678-.515-.175-.008-.377-.01-.578-.01-.201 0-.527.075-.803.377-.276.301-1.054 1.029-1.054 2.512 0 1.483 1.08 2.913 1.23 3.114.15.201 2.124 3.243 5.147 4.547.719.31 1.28.495 1.718.634.723.23 1.38.197 1.9.12.58-.086 1.785-.729 2.036-1.431.251-.703.251-1.304.175-1.431-.075-.127-.276-.201-.577-.351z"/>
+          </svg>
+        </a>
+
+        <a 
+          href="tel:+918113021038" 
+          className="fab-call"
+          title="Call (+91 8113021038)"
+          aria-label="Call Restaurant"
+        >
+          <svg className="w-6 h-6 md:w-7 md:h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-1.021 1.361c-3.14-1.282-5.67-3.812-6.952-6.952l1.361-1.021c.362-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+          </svg>
+        </a>
+      </div>
     </div>
   );
 }

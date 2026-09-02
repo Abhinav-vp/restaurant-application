@@ -39,11 +39,22 @@ export interface Coupon {
   createdAt: string;
 }
 
+export interface EnquiryItemDetail {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
 export interface Enquiry {
   id: string;
   customerName: string;
   customerPhone: string;
   items: string;
+  itemDetails?: EnquiryItemDetail[];
+  couponCode?: string;
+  couponDiscount?: number;
+  subtotalPrice?: number;
   totalQuantity: number;
   totalPrice: number;
   createdAt: string;

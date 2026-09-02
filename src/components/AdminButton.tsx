@@ -29,8 +29,10 @@ export default function AdminButton() {
             if (mounted && val && val === (process.env.NEXT_PUBLIC_DEV_ADMIN_KEY || '')) setIsAdmin(true);
             return;
           }
-        } catch (e) {}
-      } catch (e) {
+        } catch {
+          // ignore
+        }
+      } catch {
         // ignore
       }
     })();
