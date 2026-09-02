@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import { Fire, Star, Ticket, Warning, CheckCircle, House, X } from "@phosphor-icons/react";
 import { MENU_ITEMS, INITIAL_REVIEWS, BUSINESS_PROFILE, MenuItem, Offer, Coupon, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry, validateCoupon, generateOrderId, formatWhatsAppOrderMessage } from "@/lib/restaurant-data";
 import RestaurantProfile from "@/components/RestaurantProfile";
 
@@ -379,9 +380,9 @@ export default function Home() {
 
                     {/* Offer text info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-                          🔥 {offer.discountType === 'percentage' ? `${offer.discountValue}% OFF` : `₹${offer.discountValue} OFF`}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 flex items-center gap-1">
+                          <Fire className="w-3.5 h-3.5" weight="fill" /> {offer.discountType === 'percentage' ? `${offer.discountValue}% OFF` : `₹${offer.discountValue} OFF`}
                         </span>
                         <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
                           {matchedDish ? matchedDish.name : 'Special Deal'}
@@ -687,9 +688,9 @@ export default function Home() {
                   <span className="text-sm font-bold text-amber-400">3.7 out of 5 stars</span>
                   <div className="flex items-center text-amber-400 gap-0.5">
                     {Array.from({ length: 4 }).map((_, i) => (
-                      <span key={i}>★</span>
+                      <span key={i}><Star className="w-3.5 h-3.5" weight="fill" /></span>
                     ))}
-                    <span className="text-slate-600">★</span>
+                    <span className="text-slate-600"><Star className="w-3.5 h-3.5" weight="fill" /></span>
                   </div>
                   <span className="text-xs text-slate-500 font-medium">({INITIAL_REVIEWS.length} reviews)</span>
                 </div>
@@ -721,7 +722,7 @@ export default function Home() {
                     </div>
                     <div className="flex items-center text-amber-500 text-xs">
                       {Array.from({ length: 5 }).map((_, i) => (
-                        <span key={i} className={i < rev.rating ? "text-amber-500" : "text-slate-800"}>★</span>
+                        <span key={i} className={i < rev.rating ? "text-amber-500" : "text-slate-800"}><Star className="w-3.5 h-3.5" weight="fill" /></span>
                       ))}
                     </div>
                   </div>
@@ -811,14 +812,14 @@ export default function Home() {
                         <div className="flex items-center gap-3">
                           <button
                             onClick={() => handleUpdateQty(item.dish.id, -1)}
-                            className="w-7 h-7 rounded bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
+                            className="w-11 h-11 rounded-lg bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
                           >
                             -
                           </button>
                           <span className="text-sm font-extrabold text-white w-4 text-center">{item.quantity}</span>
                           <button
                             onClick={() => handleUpdateQty(item.dish.id, 1)}
-                            className="w-7 h-7 rounded bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
+                            className="w-11 h-11 rounded-lg bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
                           >
                             +
                           </button>
@@ -906,11 +907,10 @@ export default function Home() {
             {/* Close */}
             <button
               onClick={() => setIsCheckoutOpen(false)}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-lg transition-smooth"
+              className="absolute top-3 right-3 p-3 text-slate-400 hover:text-white rounded-lg transition-smooth"
+              aria-label="Close Checkout Modal"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
 
             <h3 className="text-xl font-extrabold text-white mb-1">Checkout</h3>
@@ -985,7 +985,7 @@ export default function Home() {
                 />
                 {phoneTouched && customerPhone && !validatePhone(customerPhone).isValid && (
                   <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
-                    <span>⚠️</span> {validatePhone(customerPhone).message}
+                    <Warning className="w-3.5 h-3.5" /> {validatePhone(customerPhone).message}
                   </p>
                 )}
                 {phoneTouched && customerPhone && validatePhone(customerPhone).isValid && (
@@ -997,8 +997,8 @@ export default function Home() {
 
               {/* Delivery Address Section */}
               <div className="pt-2 border-t border-slate-800">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="text-amber-500">🏡</span>
+                <div className="flex items-center gap-2 mb-2">
+                  <House className="w-4 h-4 text-amber-500" />
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Home Delivery Address *</label>
                 </div>
                 <textarea
@@ -1021,7 +1021,7 @@ export default function Home() {
                 />
                 {addressTouched && !validateAddress(deliveryAddress).isValid && (
                   <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
-                    <span>⚠️</span> {validateAddress(deliveryAddress).message}
+                    <Warning className="w-3.5 h-3.5" /> {validateAddress(deliveryAddress).message}
                   </p>
                 )}
               </div>
@@ -1052,7 +1052,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={isOrdering || (phoneTouched && !validatePhone(customerPhone).isValid) || (addressTouched && !validateAddress(deliveryAddress).isValid)}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm border-transparent select-none mt-2 hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm border-transparent select-none mt-2 hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isOrdering ? (
                   <>
@@ -1122,7 +1122,7 @@ export default function Home() {
 
             <button
               onClick={() => setOrderPlaced(false)}
-              className="w-full btn-primary py-3.5 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent"
+              className="w-full btn-primary py-4 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent"
             >
               Explore More Dishes
             </button>
