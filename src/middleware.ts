@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { verifyAdminSessionToken } from "./lib/auth-security";
 
 function isSupabaseConfigured() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -41,10 +42,12 @@ export async function middleware(request: NextRequest) {
     await supabase.auth.getUser();
   }
 
-  // Protect /dashboard route - require admin-auth cookie
+  // Protect /dashboard route - cryptographically verify admin-auth token
   if (request.nextUrl.pathname.startsWith('/dashboard')) {
     const adminAuth = request.cookies.get('admin-auth');
-    if (!adminAuth || adminAuth.value !== 'authenticated') {
+    const isValidToken = await verifyAdminSessionToken(adminAuth?.value);
+
+    if (!isValidToken) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
   }

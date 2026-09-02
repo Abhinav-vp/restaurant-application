@@ -12,6 +12,13 @@ export default function AdminButton() {
     let mounted = true;
     (async () => {
       try {
+        // Check if admin-auth cookie is set
+        const match = document.cookie.split(';').map(s => s.trim()).find(c => c.startsWith('admin-auth='));
+        if (match && match.split('=')[1]) {
+          if (mounted) setIsAdmin(true);
+          return;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         const adminListRaw = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "");
         const adminList = adminListRaw.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
@@ -19,18 +26,6 @@ export default function AdminButton() {
         if (user && user.email) {
           if (mounted) setIsAdmin(adminList.includes(user.email.toLowerCase()));
           return;
-        }
-
-        // Fallback: check dev-admin cookie set from console
-        try {
-          const match = document.cookie.split(';').map(s => s.trim()).find(c => c.startsWith('dev-admin='));
-          if (match) {
-            const val = match.split('=')[1] || '';
-            if (mounted && val && val === (process.env.NEXT_PUBLIC_DEV_ADMIN_KEY || '')) setIsAdmin(true);
-            return;
-          }
-        } catch {
-          // ignore
         }
       } catch {
         // ignore
