@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { MENU_ITEMS, INITIAL_REVIEWS, BUSINESS_PROFILE, MenuItem, Offer, Coupon, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry, validateCoupon } from "@/lib/restaurant-data";
+import { MENU_ITEMS, INITIAL_REVIEWS, BUSINESS_PROFILE, MenuItem, Offer, Coupon, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry, validateCoupon, generateOrderId, formatWhatsAppOrderMessage } from "@/lib/restaurant-data";
 import RestaurantProfile from "@/components/RestaurantProfile";
 
 interface CartItem {
@@ -16,7 +16,7 @@ export default function Home() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(MENU_ITEMS);
   const [offers, setOffers] = useState<Offer[]>([]);
-  
+
   // Coupon State
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ coupon: Coupon; discountAmount: number } | null>(null);
@@ -27,8 +27,12 @@ export default function Home() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryLandmark, setDeliveryLandmark] = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [lastPlacedOrderId, setLastPlacedOrderId] = useState("");
   const [orderError, setOrderError] = useState("");
 
   // Load menu items, offers, and coupons
@@ -126,8 +130,8 @@ export default function Home() {
   };
 
   // Calculations
-  const filteredDishes = activeCategory === "all" 
-    ? menuItems 
+  const filteredDishes = activeCategory === "all"
+    ? menuItems
     : menuItems.filter(item => item.category === activeCategory);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -142,8 +146,9 @@ export default function Home() {
   const [currentOfferIndex, setCurrentOfferIndex] = useState(0);
   const [isCarouselHovered, setIsCarouselHovered] = useState(false);
 
-  // Phone Validation State
+  // Phone & Address Validation State
   const [phoneTouched, setPhoneTouched] = useState(false);
+  const [addressTouched, setAddressTouched] = useState(false);
 
   // Auto-rotate hero offers carousel
   useEffect(() => {
@@ -165,6 +170,14 @@ export default function Home() {
     return { isValid: true, message: "" };
   };
 
+  // Address Validation Helper
+  const validateAddress = (address: string): { isValid: boolean; message: string } => {
+    if (!address || address.trim().length < 5) {
+      return { isValid: false, message: "Please enter a complete home delivery address (min 5 characters)" };
+    }
+    return { isValid: true, message: "" };
+  };
+
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
@@ -176,8 +189,18 @@ export default function Home() {
       return;
     }
 
+    const addrVal = validateAddress(deliveryAddress);
+    if (!addrVal.isValid) {
+      setAddressTouched(true);
+      setOrderError(addrVal.message);
+      return;
+    }
+
     setIsOrdering(true);
     setOrderError("");
+
+    const orderId = generateOrderId();
+    setLastPlacedOrderId(orderId);
 
     const itemListString = cart.map(item => `${item.quantity}x ${item.dish.name}`).join(", ");
     const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -196,11 +219,16 @@ export default function Home() {
     });
 
     try {
-      // Save enquiry to localStorage with structured details
+      // Save enquiry to localStorage with structured details, orderId, and deliveryAddress
       saveEnquiry({
         id: `enq-${Date.now()}`,
+        orderId,
+        status: 'pending',
         customerName,
         customerPhone,
+        deliveryAddress: deliveryAddress.trim(),
+        deliveryLandmark: deliveryLandmark.trim() || undefined,
+        deliveryNotes: deliveryNotes.trim() || undefined,
         items: fullItemsDescription,
         itemDetails,
         couponCode: appliedCoupon?.coupon.code,
@@ -213,10 +241,12 @@ export default function Home() {
 
       // Also save as order for dashboard
       const localOrder = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: orderId,
+        orderId,
         created_at: new Date().toISOString(),
         customer_name: customerName,
         customer_email: customerPhone,
+        delivery_address: deliveryAddress.trim(),
         product_name: fullItemsDescription,
         quantity: totalQuantity,
         price: parseFloat(cartFinalTotal.toFixed(2)),
@@ -225,13 +255,23 @@ export default function Home() {
       const existingLocal = JSON.parse(localStorage.getItem("orderflow_orders") || "[]");
       localStorage.setItem("orderflow_orders", JSON.stringify([localOrder, ...existingLocal]));
 
-      // Open WhatsApp
+      // Open WhatsApp with formatted message
       try {
         const whatsappNumber = "918113021038";
-        const waMessage = encodeURIComponent(
-          `New order from ${customerName} (${customerPhone}): ${itemListString}. Qty: ${totalQuantity}${couponInfo}, Total: ₹${cartFinalTotal.toFixed(2)}`
-        );
-        const waUrl = `https://wa.me/${whatsappNumber}?text=${waMessage}`;
+        const formattedMessage = formatWhatsAppOrderMessage({
+          orderId,
+          customerName,
+          customerPhone,
+          deliveryAddress: deliveryAddress.trim(),
+          deliveryLandmark: deliveryLandmark.trim() || undefined,
+          deliveryNotes: deliveryNotes.trim() || undefined,
+          cartItems: itemDetails.map(i => ({ name: i.name, quantity: i.quantity, unitPrice: i.unitPrice })),
+          subtotal: cartSubtotal,
+          couponCode: appliedCoupon?.coupon.code,
+          couponDiscount: cartDiscount,
+          finalTotal: cartFinalTotal
+        });
+        const waUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(formattedMessage)}`;
         window.open(waUrl, "_blank");
       } catch (waErr) {
         console.warn("WhatsApp redirect failed", waErr);
@@ -241,7 +281,11 @@ export default function Home() {
       setCart([]);
       setCustomerName("");
       setCustomerPhone("");
+      setDeliveryAddress("");
+      setDeliveryLandmark("");
+      setDeliveryNotes("");
       setPhoneTouched(false);
+      setAddressTouched(false);
       setAppliedCoupon(null);
       setCouponInput("");
       setCouponError("");
@@ -278,7 +322,7 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => setIsCartOpen(true)}
             className="relative p-2.5 rounded-xl glass hover:bg-slate-800/80 transition-smooth"
             aria-label="Toggle Shopping Cart"
@@ -306,7 +350,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto z-10 flex flex-col items-center">
           {/* Hero Section Offer Highlight Carousel */}
           {offers.length > 0 && (
-            <div 
+            <div
               className="w-full max-w-3xl mb-8 relative rounded-3xl overflow-hidden glass border border-amber-500/30 p-4 md:p-6 shadow-2xl shadow-amber-500/10 transition-all duration-500"
               onMouseEnter={() => setIsCarouselHovered(true)}
               onMouseLeave={() => setIsCarouselHovered(false)}
@@ -379,9 +423,8 @@ export default function Home() {
                     <button
                       key={idx}
                       onClick={() => setCurrentOfferIndex(idx)}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        currentOfferIndex === idx ? 'w-6 bg-amber-400' : 'w-1.5 bg-slate-700 hover:bg-slate-500'
-                      }`}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${currentOfferIndex === idx ? 'w-6 bg-amber-400' : 'w-1.5 bg-slate-700 hover:bg-slate-500'
+                        }`}
                       aria-label={`Go to slide ${idx + 1}`}
                     />
                   ))}
@@ -537,11 +580,10 @@ export default function Home() {
                 <button
                   key={category.id}
                   onClick={() => setActiveCategory(category.id)}
-                  className={`px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold whitespace-nowrap transition-smooth border uppercase tracking-wider ${
-                    activeCategory === category.id
+                  className={`px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[10px] md:text-xs font-bold whitespace-nowrap transition-smooth border uppercase tracking-wider ${activeCategory === category.id
                       ? "bg-amber-500 border-amber-500/20 text-slate-950 font-extrabold"
                       : "glass border-slate-800 text-slate-400 hover:text-white"
-                  }`}
+                    }`}
                 >
                   {category.label}
                 </button>
@@ -554,16 +596,16 @@ export default function Home() {
             {filteredDishes.map((dish) => {
               const priceInfo = getEffectivePrice(dish, offers);
               return (
-                <div 
-                  key={dish.id} 
+                <div
+                  key={dish.id}
                   className="glass rounded-3xl overflow-hidden hover:scale-[1.01] hover:border-slate-700/50 transition-smooth group flex flex-col"
                 >
                   {/* Image Container */}
                   <div className="h-44 md:h-52 relative w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     {dish.image ? (
                       dish.image.startsWith("/") ? (
-                        <Image 
-                          src={dish.image} 
+                        <Image
+                          src={dish.image}
                           alt={dish.name}
                           fill
                           className="object-cover group-hover:scale-105 transition-smooth"
@@ -589,7 +631,7 @@ export default function Home() {
                     {/* Offer Badge */}
                     {priceInfo.offerTitle && (
                       <span className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-red-500/90 backdrop-blur-md text-[10px] uppercase font-bold tracking-wider text-white">
-                        {offers.find(o => o.title === priceInfo.offerTitle)?.discountType === 'percentage' 
+                        {offers.find(o => o.title === priceInfo.offerTitle)?.discountType === 'percentage'
                           ? `${offers.find(o => o.title === priceInfo.offerTitle)?.discountValue}% OFF`
                           : `₹${offers.find(o => o.title === priceInfo.offerTitle)?.discountValue} OFF`
                         }
@@ -616,7 +658,7 @@ export default function Home() {
                       <p className="text-slate-400 text-sm leading-relaxed mb-4 md:mb-6 line-clamp-3">{dish.description}</p>
                     </div>
 
-                    <button 
+                    <button
                       onClick={() => handleAddToCart(dish)}
                       className="w-full btn-secondary text-sm font-semibold flex items-center justify-center gap-2 group-hover:bg-amber-500 group-hover:text-slate-900 group-hover:border-transparent transition-smooth"
                     >
@@ -652,9 +694,9 @@ export default function Home() {
                   <span className="text-xs text-slate-500 font-medium">({INITIAL_REVIEWS.length} reviews)</span>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2">
-                <a 
+                <a
                   href={BUSINESS_PROFILE.googleReviewUrl || BUSINESS_PROFILE.googleMapsUrl}
                   target="_blank"
                   rel="noreferrer"
@@ -717,7 +759,7 @@ export default function Home() {
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-sm animate-fadeIn">
           <div className="absolute inset-0 -z-10" onClick={() => setIsCartOpen(false)} />
-          
+
           <div className="w-full max-w-md bg-slate-900 border-l border-slate-800/80 p-6 flex flex-col justify-between shadow-2xl relative animate-slideLeft h-full overflow-y-auto">
             <div>
               {/* Header */}
@@ -726,7 +768,7 @@ export default function Home() {
                   <h3 className="font-extrabold text-white text-lg text-left">Your Order Basket</h3>
                   <span className="text-xs bg-slate-800 px-2 py-1 rounded text-amber-500 font-bold">{cartCount} items</span>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsCartOpen(false)}
                   className="p-1 text-slate-450 hover:text-white rounded-lg transition-smooth"
                 >
@@ -764,17 +806,17 @@ export default function Home() {
                             )}
                           </div>
                         </div>
-                        
+
                         {/* Quantity Controls */}
                         <div className="flex items-center gap-3">
-                          <button 
+                          <button
                             onClick={() => handleUpdateQty(item.dish.id, -1)}
                             className="w-7 h-7 rounded bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
                           >
                             -
                           </button>
                           <span className="text-sm font-extrabold text-white w-4 text-center">{item.quantity}</span>
-                          <button 
+                          <button
                             onClick={() => handleUpdateQty(item.dish.id, 1)}
                             className="w-7 h-7 rounded bg-slate-800 border border-slate-750 flex items-center justify-center text-slate-350 hover:bg-slate-700/80 hover:text-white transition-smooth"
                           >
@@ -842,7 +884,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }}
                   className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
                 >
@@ -862,7 +904,7 @@ export default function Home() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-lg glass rounded-3xl p-6 md:p-8 border-amber-500/20 relative animate-scaleUp">
             {/* Close */}
-            <button 
+            <button
               onClick={() => setIsCheckoutOpen(false)}
               className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-lg transition-smooth"
             >
@@ -912,20 +954,20 @@ export default function Home() {
             {/* Checkout Form */}
             <form onSubmit={handlePlaceOrder} className="space-y-4 text-left">
               <div>
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-widest mb-1.5">Your Full Name</label>
-                <input 
-                  type="text" 
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Your Full Name</label>
+                <input
+                  type="text"
                   required
-                  placeholder="Enter your name"
+                  placeholder="Enter your full name"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                   className="px-4 py-3 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-widest mb-1.5">Phone Number</label>
-                <input 
-                  type="tel" 
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Phone Number</label>
+                <input
+                  type="tel"
                   required
                   placeholder="10-digit Mobile Number (e.g. 8113021038)"
                   value={customerPhone}
@@ -934,13 +976,12 @@ export default function Home() {
                     if (!phoneTouched) setPhoneTouched(true);
                   }}
                   onBlur={() => setPhoneTouched(true)}
-                  className={`px-4 py-3 text-sm ${
-                    phoneTouched && customerPhone && !validatePhone(customerPhone).isValid
+                  className={`px-4 py-3 text-sm ${phoneTouched && customerPhone && !validatePhone(customerPhone).isValid
                       ? "border-red-500 focus:ring-red-500/50"
                       : phoneTouched && customerPhone && validatePhone(customerPhone).isValid
-                      ? "border-green-500 focus:ring-green-500/50"
-                      : ""
-                  }`}
+                        ? "border-green-500 focus:ring-green-500/50"
+                        : ""
+                    }`}
                 />
                 {phoneTouched && customerPhone && !validatePhone(customerPhone).isValid && (
                   <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
@@ -954,9 +995,63 @@ export default function Home() {
                 )}
               </div>
 
-              <button 
-                type="submit" 
-                disabled={isOrdering || (phoneTouched && !validatePhone(customerPhone).isValid)}
+              {/* Delivery Address Section */}
+              <div className="pt-2 border-t border-slate-800">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="text-amber-500">🏡</span>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Home Delivery Address *</label>
+                </div>
+                <textarea
+                  required
+                  rows={2}
+                  placeholder="House/Flat No., Building Name, Street/Road (e.g., House 42, Gurujimukku, Peringathur)"
+                  value={deliveryAddress}
+                  onChange={(e) => {
+                    setDeliveryAddress(e.target.value);
+                    if (!addressTouched) setAddressTouched(true);
+                  }}
+                  onBlur={() => setAddressTouched(true)}
+                  className={`px-4 py-2.5 text-sm bg-surface-800/50 border rounded-xl text-surface-100 w-full focus:outline-none transition-smooth ${
+                    addressTouched && !validateAddress(deliveryAddress).isValid
+                      ? "border-red-500 focus:ring-red-500/50"
+                      : addressTouched && validateAddress(deliveryAddress).isValid
+                      ? "border-green-500 focus:ring-green-500/50"
+                      : "border-slate-800 focus:border-amber-500"
+                  }`}
+                />
+                {addressTouched && !validateAddress(deliveryAddress).isValid && (
+                  <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {validateAddress(deliveryAddress).message}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Landmark / Locality (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Near Bus Stand / School"
+                    value={deliveryLandmark}
+                    onChange={(e) => setDeliveryLandmark(e.target.value)}
+                    className="px-3.5 py-2.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Delivery Notes (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="Ring bell / Leave at door"
+                    value={deliveryNotes}
+                    onChange={(e) => setDeliveryNotes(e.target.value)}
+                    className="px-3.5 py-2.5 text-xs"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isOrdering || (phoneTouched && !validatePhone(customerPhone).isValid) || (addressTouched && !validateAddress(deliveryAddress).isValid)}
                 className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm border-transparent select-none mt-2 hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isOrdering ? (
@@ -977,7 +1072,7 @@ export default function Home() {
                 )}
               </button>
               <p className="text-[10px] text-slate-500 text-center leading-normal mt-2">
-                You&apos;ll be redirected to WhatsApp to confirm your order directly with the restaurant.
+                You&apos;ll be redirected to WhatsApp with your order details and home delivery address.
               </p>
             </form>
           </div>
@@ -988,32 +1083,44 @@ export default function Home() {
       {orderPlaced && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-md glass rounded-3xl p-6 text-center border-amber-500/20 relative animate-scaleUp glow">
-            <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-6 text-amber-500">
+            <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 text-amber-500">
               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            
+
+            {lastPlacedOrderId && (
+              <span className="inline-block px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 font-mono font-bold text-xs border border-amber-500/30 mb-2">
+                #{lastPlacedOrderId}
+              </span>
+            )}
+
             <h3 className="text-xl font-extrabold text-white mb-2">Order Dispatched successfully!</h3>
             <p className="text-sm text-slate-400 mb-6">
-              Our kitchen has started assembling your Malabar spices. Estimated delivery is around 35 minutes!
+              Our kitchen has received your order. Estimated delivery is around 35 minutes!
             </p>
 
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-left space-y-4 mb-6">
+            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-left space-y-3 mb-6">
+              {lastPlacedOrderId && (
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Order ID</span>
+                  <span className="text-xs font-mono font-bold text-white">{lastPlacedOrderId}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Estimated Arrival</span>
                 <span className="text-xs font-bold text-amber-500">35 min</span>
               </div>
-              <div className="flex justify-between items-center text-xs border-t border-slate-850 pt-3">
-                <span className="text-slate-400">Order Delivery Status</span>
-                <span className="text-success font-extrabold flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-success status-pulse"></span>
+              <div className="flex justify-between items-center text-xs border-t border-slate-800 pt-3">
+                <span className="text-slate-400">Delivery Status</span>
+                <span className="text-emerald-400 font-extrabold flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
                   Processing
                 </span>
               </div>
             </div>
 
-            <button 
+            <button
               onClick={() => setOrderPlaced(false)}
               className="w-full btn-primary py-3.5 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent"
             >
@@ -1025,21 +1132,21 @@ export default function Home() {
 
       {/* Floating WhatsApp & Call Buttons */}
       <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3 group">
-        <a 
-          href="https://wa.me/918113021038" 
-          target="_blank" 
+        <a
+          href="https://wa.me/918113021038"
+          target="_blank"
           rel="noopener noreferrer"
           className="fab-whatsapp"
           title="Chat on WhatsApp (+91 8113021038)"
           aria-label="Contact on WhatsApp"
         >
           <svg className="w-6 h-6 md:w-7 md:h-7 fill-current" viewBox="0 0 24 24">
-            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.301-.15-1.785-.881-2.062-.982-.276-.101-.477-.15-.678.15-.201.301-.778.982-.954 1.183-.175.201-.351.226-.652.076-.301-.15-1.27-.468-2.42-1.494-.897-.8-1.502-1.788-1.678-2.089-.175-.301-.019-.464.131-.614.136-.135.301-.351.452-.527.15-.176.201-.301.301-.502.101-.201.05-.377-.025-.527-.075-.15-.678-1.635-.929-2.235-.244-.585-.494-.506-.678-.515-.175-.008-.377-.01-.578-.01-.201 0-.527.075-.803.377-.276.301-1.054 1.029-1.054 2.512 0 1.483 1.08 2.913 1.23 3.114.15.201 2.124 3.243 5.147 4.547.719.31 1.28.495 1.718.634.723.23 1.38.197 1.9.12.58-.086 1.785-.729 2.036-1.431.251-.703.251-1.304.175-1.431-.075-.127-.276-.201-.577-.351z"/>
+            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.301-.15-1.785-.881-2.062-.982-.276-.101-.477-.15-.678.15-.201.301-.778.982-.954 1.183-.175.201-.351.226-.652.076-.301-.15-1.27-.468-2.42-1.494-.897-.8-1.502-1.788-1.678-2.089-.175-.301-.019-.464.131-.614.136-.135.301-.351.452-.527.15-.176.201-.301.301-.502.101-.201.05-.377-.025-.527-.075-.15-.678-1.635-.929-2.235-.244-.585-.494-.506-.678-.515-.175-.008-.377-.01-.578-.01-.201 0-.527.075-.803.377-.276.301-1.054 1.029-1.054 2.512 0 1.483 1.08 2.913 1.23 3.114.15.201 2.124 3.243 5.147 4.547.719.31 1.28.495 1.718.634.723.23 1.38.197 1.9.12.58-.086 1.785-.729 2.036-1.431.251-.703.251-1.304.175-1.431-.075-.127-.276-.201-.577-.351z" />
           </svg>
         </a>
 
-        <a 
-          href="tel:+918113021038" 
+        <a
+          href="tel:+918113021038"
           className="fab-call"
           title="Call (+91 8113021038)"
           aria-label="Call Restaurant"

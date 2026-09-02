@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { MENU_ITEMS, MenuItem, Offer, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry } from "@/lib/restaurant-data";
+import { MENU_ITEMS, MenuItem, Offer, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry, generateOrderId, formatWhatsAppOrderMessage } from "@/lib/restaurant-data";
 
 export default function MenuPage() {
   const [cart, setCart] = useState<{ dish: MenuItem; quantity: number }[]>([]);
@@ -15,6 +15,12 @@ export default function MenuPage() {
   const [isOrdering, setIsOrdering] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryLandmark, setDeliveryLandmark] = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [phoneTouched, setPhoneTouched] = useState(false);
+  const [addressTouched, setAddressTouched] = useState(false);
+  const [orderError, setOrderError] = useState("");
 
   React.useEffect(() => {
     const loadProducts = () => {
@@ -64,20 +70,65 @@ export default function MenuPage() {
 
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0);
 
+  const validatePhone = (phone: string): { isValid: boolean; message: string } => {
+    const clean = phone.replace(/[\s-]/g, '');
+    if (!clean) return { isValid: false, message: "Phone number is required" };
+    const indianMobileRegex = /^(?:\+?91)?[6-9]\d{9}$/;
+    if (!indianMobileRegex.test(clean)) {
+      return { isValid: false, message: "Please enter a valid 10-digit mobile number" };
+    }
+    return { isValid: true, message: "" };
+  };
+
+  const validateAddress = (address: string): { isValid: boolean; message: string } => {
+    if (!address || address.trim().length < 5) {
+      return { isValid: false, message: "Please enter a complete home delivery address (min 5 characters)" };
+    }
+    return { isValid: true, message: "" };
+  };
+
   const placeOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
+
+    const phoneVal = validatePhone(customerPhone);
+    if (!phoneVal.isValid) {
+      setPhoneTouched(true);
+      setOrderError(phoneVal.message);
+      return;
+    }
+
+    const addrVal = validateAddress(deliveryAddress);
+    if (!addrVal.isValid) {
+      setAddressTouched(true);
+      setOrderError(addrVal.message);
+      return;
+    }
+
     setIsOrdering(true);
+    setOrderError("");
+
     try {
+      const orderId = generateOrderId();
       const itemList = cart.map((i) => `${i.quantity}x ${i.dish.name}`).join(", ");
       const totalQty = cart.reduce((s, c) => s + c.quantity, 0);
       const totalPrice = parseFloat(subtotal.toFixed(2));
 
+      const cartItems = cart.map(c => {
+        const p = getEffectivePrice(c.dish, offers);
+        return { name: c.dish.name, quantity: c.quantity, unitPrice: p.price };
+      });
+
       // Save enquiry
       saveEnquiry({
         id: `enq-${Date.now()}`,
+        orderId,
+        status: 'pending',
         customerName,
         customerPhone,
+        deliveryAddress: deliveryAddress.trim(),
+        deliveryLandmark: deliveryLandmark.trim() || undefined,
+        deliveryNotes: deliveryNotes.trim() || undefined,
         items: itemList,
         totalQuantity: totalQty,
         totalPrice,
@@ -86,10 +137,12 @@ export default function MenuPage() {
 
       // Save order
       const localOrder = {
-        id: Math.random().toString(36).slice(2),
+        id: orderId,
+        orderId,
         created_at: new Date().toISOString(),
         customer_name: customerName,
         customer_email: customerPhone,
+        delivery_address: deliveryAddress.trim(),
         product_name: itemList,
         quantity: totalQty,
         price: totalPrice,
@@ -101,8 +154,18 @@ export default function MenuPage() {
       // Open WhatsApp
       try {
         const whatsappNumber = "918113021038";
-        const waMessage = encodeURIComponent(`New order from ${customerName} (${customerPhone}): ${itemList}. Qty: ${totalQty}, Total: ₹${totalPrice.toFixed(2)}`);
-        const waUrl = `https://wa.me/${whatsappNumber}?text=${waMessage}`;
+        const formattedMessage = formatWhatsAppOrderMessage({
+          orderId,
+          customerName,
+          customerPhone,
+          deliveryAddress: deliveryAddress.trim(),
+          deliveryLandmark: deliveryLandmark.trim() || undefined,
+          deliveryNotes: deliveryNotes.trim() || undefined,
+          cartItems,
+          subtotal,
+          finalTotal: totalPrice,
+        });
+        const waUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(formattedMessage)}`;
         window.open(waUrl, "_blank");
       } catch (waErr) {
         console.warn("WhatsApp redirect failed", waErr);
@@ -111,11 +174,16 @@ export default function MenuPage() {
       setCart([]);
       setCustomerPhone("");
       setCustomerName("");
+      setDeliveryAddress("");
+      setDeliveryLandmark("");
+      setDeliveryNotes("");
+      setPhoneTouched(false);
+      setAddressTouched(false);
       setIsCartOpen(false);
       setIsCheckoutOpen(false);
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to place order");
+      setOrderError(err.message || "Failed to place order");
     } finally {
       setIsOrdering(false);
     }
@@ -135,7 +203,7 @@ export default function MenuPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => setIsCartOpen(true)}
             className="relative p-2.5 rounded-xl glass hover:bg-slate-800/80 transition-smooth"
           >
@@ -314,7 +382,7 @@ export default function MenuPage() {
       {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-lg glass rounded-3xl p-6 md:p-8 border-amber-500/20 relative animate-scaleUp">
-            <button 
+            <button
               onClick={() => setIsCheckoutOpen(false)}
               className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-lg transition-smooth"
             >
@@ -342,20 +410,112 @@ export default function MenuPage() {
               </div>
             </div>
 
+            {orderError && (
+              <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs">
+                {orderError}
+              </div>
+            )}
+
             <form onSubmit={placeOrder} className="space-y-4 text-left">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Your Full Name</label>
-                <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} required placeholder="Enter your name" className="px-4 py-3 text-sm" />
+                <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} required placeholder="Enter your full name" className="px-4 py-3 text-sm" />
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Phone Number</label>
-                <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} type="tel" required placeholder="+91 XXXXX XXXXX" className="px-4 py-3 text-sm" />
+                <input 
+                  value={customerPhone} 
+                  onChange={(e) => {
+                    setCustomerPhone(e.target.value);
+                    if (!phoneTouched) setPhoneTouched(true);
+                  }} 
+                  onBlur={() => setPhoneTouched(true)}
+                  type="tel" 
+                  required 
+                  placeholder="10-digit Mobile Number (e.g. 8113021038)" 
+                  className={`px-4 py-3 text-sm ${
+                    phoneTouched && customerPhone && !validatePhone(customerPhone).isValid
+                      ? "border-red-500 focus:ring-red-500/50"
+                      : phoneTouched && customerPhone && validatePhone(customerPhone).isValid
+                      ? "border-green-500 focus:ring-green-500/50"
+                      : ""
+                  }`} 
+                />
+                {phoneTouched && customerPhone && !validatePhone(customerPhone).isValid && (
+                  <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {validatePhone(customerPhone).message}
+                  </p>
+                )}
+                {phoneTouched && customerPhone && validatePhone(customerPhone).isValid && (
+                  <p className="text-[10px] text-green-400 mt-1 flex items-center gap-1">
+                    <span>✓</span> Valid Indian mobile number
+                  </p>
+                )}
               </div>
-              <button disabled={isOrdering || cart.length === 0} className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2">
+
+              {/* Delivery Address Section */}
+              <div className="pt-2 border-t border-slate-800">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="text-amber-500">🏡</span>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Home Delivery Address *</label>
+                </div>
+                <textarea
+                  required
+                  rows={2}
+                  placeholder="House/Flat No., Building Name, Street/Road (e.g., House 42, Gurujimukku, Peringathur)"
+                  value={deliveryAddress}
+                  onChange={(e) => {
+                    setDeliveryAddress(e.target.value);
+                    if (!addressTouched) setAddressTouched(true);
+                  }}
+                  onBlur={() => setAddressTouched(true)}
+                  className={`px-4 py-2.5 text-sm bg-surface-800/50 border rounded-xl text-surface-100 w-full focus:outline-none transition-smooth ${
+                    addressTouched && !validateAddress(deliveryAddress).isValid
+                      ? "border-red-500 focus:ring-red-500/50"
+                      : addressTouched && validateAddress(deliveryAddress).isValid
+                      ? "border-green-500 focus:ring-green-500/50"
+                      : "border-slate-800 focus:border-amber-500"
+                  }`}
+                />
+                {addressTouched && !validateAddress(deliveryAddress).isValid && (
+                  <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {validateAddress(deliveryAddress).message}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Landmark / Locality (Optional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Near Bus Stand / School"
+                    value={deliveryLandmark}
+                    onChange={(e) => setDeliveryLandmark(e.target.value)}
+                    className="px-3.5 py-2.5 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Delivery Notes (Optional)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ring bell / Leave at door"
+                    value={deliveryNotes}
+                    onChange={(e) => setDeliveryNotes(e.target.value)}
+                    className="px-3.5 py-2.5 text-xs"
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isOrdering || cart.length === 0 || (phoneTouched && !validatePhone(customerPhone).isValid) || (addressTouched && !validateAddress(deliveryAddress).isValid)} 
+                className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
                 {isOrdering ? (
                   <>
                     <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                    Placing...
+                    Placing order...
                   </>
                 ) : (
                   <>

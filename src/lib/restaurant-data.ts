@@ -46,10 +46,26 @@ export interface EnquiryItemDetail {
   lineTotal: number;
 }
 
+export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'out_for_delivery' | 'delivered' | 'cancelled';
+
+export const ORDER_STATUS_CONFIG: Record<OrderStatus, { label: string; color: string }> = {
+  pending:          { label: 'Pending',          color: 'amber' },
+  confirmed:        { label: 'Confirmed',        color: 'blue' },
+  preparing:        { label: 'Preparing',        color: 'purple' },
+  out_for_delivery: { label: 'Out for Delivery', color: 'orange' },
+  delivered:        { label: 'Delivered',         color: 'emerald' },
+  cancelled:        { label: 'Cancelled',        color: 'red' },
+};
+
 export interface Enquiry {
   id: string;
+  orderId?: string;
+  status?: OrderStatus;
   customerName: string;
   customerPhone: string;
+  deliveryAddress?: string;
+  deliveryLandmark?: string;
+  deliveryNotes?: string;
   items: string;
   itemDetails?: EnquiryItemDetail[];
   couponCode?: string;
@@ -58,6 +74,62 @@ export interface Enquiry {
   totalQuantity: number;
   totalPrice: number;
   createdAt: string;
+}
+
+// Generate a unique order ID in format ORD-YYMMDD-XXXX
+export function generateOrderId(): string {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `ORD-${yy}${mm}${dd}-${rand}`;
+}
+
+// Format a structured WhatsApp order message with order ID and delivery info
+export function formatWhatsAppOrderMessage(params: {
+  orderId: string;
+  customerName: string;
+  customerPhone: string;
+  deliveryAddress: string;
+  deliveryLandmark?: string;
+  deliveryNotes?: string;
+  cartItems: { name: string; quantity: number; unitPrice: number }[];
+  subtotal: number;
+  couponCode?: string;
+  couponDiscount?: number;
+  finalTotal: number;
+}): string {
+  const {
+    orderId, customerName, customerPhone,
+    deliveryAddress, deliveryLandmark, deliveryNotes,
+    cartItems, subtotal, couponCode, couponDiscount = 0, finalTotal,
+  } = params;
+
+  let msg = `🛒 *NEW ORDER — #${orderId}*\n`;
+  msg += `--------------------------------\n`;
+  msg += `👤 *Customer:* ${customerName}\n`;
+  msg += `📞 *Phone:* ${customerPhone}\n`;
+  msg += `📍 *Delivery:* ${deliveryAddress}`;
+  if (deliveryLandmark) msg += ` (${deliveryLandmark})`;
+  msg += `\n`;
+  if (deliveryNotes) msg += `📝 *Notes:* ${deliveryNotes}\n`;
+
+  msg += `\n📦 *ORDER ITEMS:*\n`;
+  cartItems.forEach(item => {
+    msg += `• ${item.quantity}x ${item.name} — ₹${(item.unitPrice * item.quantity).toFixed(2)}\n`;
+  });
+
+  msg += `\n--------------------------------\n`;
+  msg += `💵 Subtotal: ₹${subtotal.toFixed(2)}\n`;
+  if (couponDiscount > 0 && couponCode) {
+    msg += `🎟️ Coupon (${couponCode}): -₹${couponDiscount.toFixed(2)}\n`;
+  }
+  msg += `💰 *TOTAL: ₹${finalTotal.toFixed(2)}*\n`;
+  msg += `--------------------------------\n`;
+  msg += `Please confirm order and estimated delivery time. Thank you!`;
+
+  return msg;
 }
 
 export const MENU_ITEMS: MenuItem[] = [
@@ -219,7 +291,7 @@ export function getMenuItems(): MenuItem[] {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
-  } catch {}
+  } catch { }
   return MENU_ITEMS;
 }
 
@@ -232,7 +304,7 @@ export function getActiveOffers(): Offer[] {
       const parsed: Offer[] = JSON.parse(stored);
       return parsed.filter(o => o.active);
     }
-  } catch {}
+  } catch { }
   return [];
 }
 
@@ -272,7 +344,28 @@ export function saveEnquiry(enquiry: Enquiry): void {
   try {
     const existing = JSON.parse(localStorage.getItem('orderflow_enquiries') || '[]');
     localStorage.setItem('orderflow_enquiries', JSON.stringify([enquiry, ...existing]));
-  } catch {}
+  } catch { }
+}
+
+// Helper: update an enquiry's delivery status in localStorage
+export function updateEnquiryStatus(enquiryId: string, newStatus: OrderStatus): void {
+  if (typeof window === 'undefined') return;
+  try {
+    // Update enquiries
+    const enquiries: Enquiry[] = JSON.parse(localStorage.getItem('orderflow_enquiries') || '[]');
+    const updated = enquiries.map(e => e.id === enquiryId ? { ...e, status: newStatus } : e);
+    localStorage.setItem('orderflow_enquiries', JSON.stringify(updated));
+
+    // Also sync status to orderflow_orders if orderId matches
+    const matchedEnquiry = updated.find(e => e.id === enquiryId);
+    if (matchedEnquiry?.orderId) {
+      const orders = JSON.parse(localStorage.getItem('orderflow_orders') || '[]');
+      const updatedOrders = orders.map((o: any) =>
+        o.orderId === matchedEnquiry.orderId ? { ...o, status: newStatus } : o
+      );
+      localStorage.setItem('orderflow_orders', JSON.stringify(updatedOrders));
+    }
+  } catch { }
 }
 
 export const DEFAULT_COUPONS: Coupon[] = [
@@ -308,7 +401,7 @@ export function getCoupons(): Coupon[] {
       const parsed: Coupon[] = JSON.parse(stored);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
-  } catch {}
+  } catch { }
   return DEFAULT_COUPONS;
 }
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MenuItem, Offer, Enquiry, Coupon, MENU_ITEMS, DEFAULT_COUPONS } from "@/lib/restaurant-data";
+import { MenuItem, Offer, Enquiry, Coupon, OrderStatus, ORDER_STATUS_CONFIG, MENU_ITEMS, DEFAULT_COUPONS, updateEnquiryStatus } from "@/lib/restaurant-data";
 
 type AdminMenuItem = MenuItem & { id: string };
 
@@ -20,6 +20,7 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
 
   // Enquiries State
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
 
   // Offers State
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -140,6 +141,16 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     setEnquiries([]);
     localStorage.setItem('orderflow_enquiries', JSON.stringify([]));
   };
+
+  // Status management
+  const handleStatusChange = (enquiryId: string, newStatus: OrderStatus) => {
+    updateEnquiryStatus(enquiryId, newStatus);
+    setEnquiries(prev => prev.map(e => e.id === enquiryId ? { ...e, status: newStatus } : e));
+  };
+
+  const filteredEnquiries = statusFilter === 'all'
+    ? enquiries
+    : enquiries.filter(e => (e.status || 'pending') === statusFilter);
 
   // Offer management
   const saveOffers = (items: Offer[]) => {
@@ -510,7 +521,7 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
         {/* ====== ENQUIRIES TAB ====== */}
         {activeTab === 'enquiries' && (
           <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-extrabold text-white">Customer Enquiries</h2>
               {enquiries.length > 0 && (
                 <button onClick={handleClearEnquiries} className="btn-danger text-xs px-4 py-2 flex items-center gap-2">
@@ -519,35 +530,137 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
               )}
             </div>
 
+            {/* Status Filter Bar */}
+            {enquiries.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-5">
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-smooth border ${
+                    statusFilter === 'all'
+                      ? 'bg-white/10 border-white/20 text-white'
+                      : 'glass border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All ({enquiries.length})
+                </button>
+                {(Object.keys(ORDER_STATUS_CONFIG) as OrderStatus[]).map(status => {
+                  const config = ORDER_STATUS_CONFIG[status];
+                  const count = enquiries.filter(e => (e.status || 'pending') === status).length;
+                  if (count === 0) return null;
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => setStatusFilter(status)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-smooth border ${
+                        statusFilter === status
+                          ? `bg-${config.color}-500/20 border-${config.color}-500/40 text-${config.color}-400`
+                          : 'glass border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {config.label} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {enquiries.length === 0 ? (
               <div className="text-center py-20 text-slate-500 glass rounded-2xl">
                 <p className="text-4xl mb-3">📋</p>
                 <p className="text-sm font-semibold">No enquiries yet</p>
                 <p className="text-xs mt-1">Customer enquiries will appear here when they place orders via WhatsApp.</p>
               </div>
+            ) : filteredEnquiries.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 glass rounded-2xl">
+                <p className="text-2xl mb-2">🔍</p>
+                <p className="text-sm font-semibold">No orders with this status</p>
+                <button onClick={() => setStatusFilter('all')} className="text-xs text-amber-400 hover:underline mt-2">Show all orders</button>
+              </div>
             ) : (
               <div className="space-y-3">
-                {enquiries.map(enq => (
-                  <div key={enq.id} className="glass rounded-2xl p-5 border border-slate-800 hover:border-slate-700/60 transition-smooth">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="font-extrabold text-white">{enq.customerName}</span>
-                          <a href={`tel:${enq.customerPhone}`} className="text-xs text-amber-400 font-bold hover:underline">📞 {enq.customerPhone}</a>
+                {filteredEnquiries.map(enq => {
+                  const currentStatus = enq.status || 'pending';
+                  const statusConfig = ORDER_STATUS_CONFIG[currentStatus];
+
+                  // Dynamic badge colors using inline styles for reliability
+                  const badgeColors: Record<string, { bg: string; text: string; border: string }> = {
+                    amber:   { bg: 'rgba(245,158,11,0.15)', text: '#fbbf24', border: 'rgba(245,158,11,0.3)' },
+                    blue:    { bg: 'rgba(59,130,246,0.15)',  text: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
+                    purple:  { bg: 'rgba(168,85,247,0.15)',  text: '#c084fc', border: 'rgba(168,85,247,0.3)' },
+                    orange:  { bg: 'rgba(249,115,22,0.15)',  text: '#fb923c', border: 'rgba(249,115,22,0.3)' },
+                    emerald: { bg: 'rgba(16,185,129,0.15)',  text: '#34d399', border: 'rgba(16,185,129,0.3)' },
+                    red:     { bg: 'rgba(239,68,68,0.15)',   text: '#f87171', border: 'rgba(239,68,68,0.3)' },
+                  };
+                  const bc = badgeColors[statusConfig.color] || badgeColors.amber;
+
+                  return (
+                    <div key={enq.id} className="glass rounded-2xl p-5 border border-slate-800 hover:border-slate-700/60 transition-smooth">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          {/* Header Row: Order ID, Name, Phone, Status Badge */}
+                          <div className="flex items-center gap-3 mb-3 flex-wrap">
+                            {enq.orderId && (
+                              <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono font-bold text-xs border border-amber-500/30">
+                                #{enq.orderId}
+                              </span>
+                            )}
+                            <span className="font-extrabold text-white">{enq.customerName}</span>
+                            <a href={`tel:${enq.customerPhone}`} className="text-xs text-amber-400 font-bold hover:underline">📞 {enq.customerPhone}</a>
+                            
+                            {/* Status Badge */}
+                            <span
+                              className="px-2.5 py-1 rounded-full font-bold text-[10px] uppercase tracking-wider border ml-auto"
+                              style={{ backgroundColor: bc.bg, color: bc.text, borderColor: bc.border }}
+                            >
+                              {statusConfig.label}
+                            </span>
+                          </div>
+
+                          {/* Delivery Address */}
+                          {enq.deliveryAddress && (
+                            <div className="mb-2 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800/80 text-xs">
+                              <span className="text-amber-500 font-bold">🏡 Delivery: </span>
+                              <span className="text-slate-200">{enq.deliveryAddress}</span>
+                              {enq.deliveryLandmark && (
+                                <span className="text-slate-400"> (Landmark: {enq.deliveryLandmark})</span>
+                              )}
+                              {enq.deliveryNotes && (
+                                <div className="text-slate-400 mt-1 italic">Note: {enq.deliveryNotes}</div>
+                              )}
+                            </div>
+                          )}
+
+                          <p className="text-sm text-slate-300 mb-3">{enq.items}</p>
+
+                          {/* Bottom Row: Qty, Price, Date, Status Dropdown */}
+                          <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap">
+                            <span>Qty: {enq.totalQuantity}</span>
+                            <span className="font-bold text-amber-400/80">₹{enq.totalPrice.toFixed(2)}</span>
+                            <span>{new Date(enq.createdAt).toLocaleString()}</span>
+
+                            {/* Status Dropdown */}
+                            <div className="ml-auto flex items-center gap-2">
+                              <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Status:</label>
+                              <select
+                                value={currentStatus}
+                                onChange={(e) => handleStatusChange(enq.id, e.target.value as OrderStatus)}
+                                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-amber-500 transition-smooth cursor-pointer"
+                              >
+                                {(Object.keys(ORDER_STATUS_CONFIG) as OrderStatus[]).map(s => (
+                                  <option key={s} value={s}>{ORDER_STATUS_CONFIG[s].label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm text-slate-300 mb-2">{enq.items}</p>
-                        <div className="flex items-center gap-4 text-xs text-slate-500">
-                          <span>Qty: {enq.totalQuantity}</span>
-                          <span className="font-bold text-amber-400/80">₹{enq.totalPrice.toFixed(2)}</span>
-                          <span>{new Date(enq.createdAt).toLocaleString()}</span>
-                        </div>
+
+                        <button onClick={() => handleDeleteEnquiry(enq.id)} className="text-slate-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition-smooth shrink-0">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
                       </div>
-                      <button onClick={() => handleDeleteEnquiry(enq.id)} className="text-slate-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition-smooth shrink-0">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
