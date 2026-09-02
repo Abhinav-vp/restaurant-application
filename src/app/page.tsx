@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { MENU_ITEMS, INITIAL_REVIEWS, BUSINESS_PROFILE, MenuItem, Offer, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry } from "@/lib/restaurant-data";
+import { MENU_ITEMS, INITIAL_REVIEWS, BUSINESS_PROFILE, MenuItem, Offer, Coupon, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry, validateCoupon } from "@/lib/restaurant-data";
 import RestaurantProfile from "@/components/RestaurantProfile";
 
 interface CartItem {
@@ -17,6 +17,12 @@ export default function Home() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>(MENU_ITEMS);
   const [offers, setOffers] = useState<Offer[]>([]);
   
+  // Coupon State
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ coupon: Coupon; discountAmount: number } | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [couponSuccess, setCouponSuccess] = useState("");
+
   // Checkout State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
@@ -25,26 +31,78 @@ export default function Home() {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderError, setOrderError] = useState("");
 
-  // Load menu items, offers, and reviews
+  // Load menu items, offers, and coupons
   useEffect(() => {
     setMenuItems(getMenuItems());
     setOffers(getActiveOffers());
 
-
-
-    // Listen for product/offer updates from admin
+    // Listen for product/offer/coupon updates from admin
     const onUpdate = () => {
       setMenuItems(getMenuItems());
       setOffers(getActiveOffers());
     };
     window.addEventListener('orderflow_products_updated', onUpdate);
+    window.addEventListener('orderflow_coupons_updated', onUpdate);
     window.addEventListener('storage', (e) => {
-      if (e.key === 'orderflow_menu_items' || e.key === 'orderflow_offers') onUpdate();
+      if (e.key === 'orderflow_menu_items' || e.key === 'orderflow_offers' || e.key === 'orderflow_coupons') onUpdate();
     });
     return () => {
       window.removeEventListener('orderflow_products_updated', onUpdate);
+      window.removeEventListener('orderflow_coupons_updated', onUpdate);
     };
   }, []);
+
+  // Re-validate applied coupon when cart or offers change
+  useEffect(() => {
+    if (!appliedCoupon) return;
+    const subtotal = cart.reduce((sum, item) => {
+      const { price } = getEffectivePrice(item.dish, offers);
+      return sum + (price * item.quantity);
+    }, 0);
+
+    if (subtotal === 0) {
+      setAppliedCoupon(null);
+      setCouponSuccess("");
+      return;
+    }
+
+    const res = validateCoupon(appliedCoupon.coupon.code, subtotal);
+    if (res.valid && res.coupon) {
+      setAppliedCoupon({ coupon: res.coupon, discountAmount: res.discountAmount });
+    } else {
+      setAppliedCoupon(null);
+      setCouponError(res.message || "Applied coupon is no longer valid");
+      setCouponSuccess("");
+    }
+  }, [cart, offers]);
+
+  const handleApplyCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponError("");
+    setCouponSuccess("");
+
+    const subtotal = cart.reduce((sum, item) => {
+      const { price } = getEffectivePrice(item.dish, offers);
+      return sum + (price * item.quantity);
+    }, 0);
+
+    const res = validateCoupon(couponInput, subtotal);
+    if (!res.valid) {
+      setCouponError(res.message || "Invalid coupon code");
+      setAppliedCoupon(null);
+    } else if (res.coupon) {
+      setAppliedCoupon({ coupon: res.coupon, discountAmount: res.discountAmount });
+      setCouponSuccess(`Code '${res.coupon.code}' applied! Saved ₹${res.discountAmount.toFixed(2)}`);
+      setCouponError("");
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponError("");
+    setCouponSuccess("");
+  };
 
   const handleAddToCart = (dish: MenuItem) => {
     const existing = cart.find(item => item.dish.id === dish.id);
@@ -67,71 +125,6 @@ export default function Home() {
     setCart(updated);
   };
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (cart.length === 0) return;
-    setIsOrdering(true);
-    setOrderError("");
-
-    const itemListString = cart.map(item => `${item.quantity}x ${item.dish.name}`).join(", ");
-    const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
-    const totalPrice = cart.reduce((sum, item) => {
-      const { price } = getEffectivePrice(item.dish, offers);
-      return sum + (price * item.quantity);
-    }, 0);
-
-    try {
-      // Save enquiry to localStorage
-      saveEnquiry({
-        id: `enq-${Date.now()}`,
-        customerName,
-        customerPhone,
-        items: itemListString,
-        totalQuantity,
-        totalPrice: parseFloat(totalPrice.toFixed(2)),
-        createdAt: new Date().toISOString(),
-      });
-
-      // Also save as order for dashboard
-      const localOrder = {
-        id: Math.random().toString(36).substr(2, 9),
-        created_at: new Date().toISOString(),
-        customer_name: customerName,
-        customer_email: customerPhone,
-        product_name: itemListString,
-        quantity: totalQuantity,
-        price: parseFloat(totalPrice.toFixed(2)),
-        status: "pending"
-      };
-      const existingLocal = JSON.parse(localStorage.getItem("orderflow_orders") || "[]");
-      localStorage.setItem("orderflow_orders", JSON.stringify([localOrder, ...existingLocal]));
-
-      // Open WhatsApp
-      try {
-        const whatsappNumber = "918113021038";
-        const waMessage = encodeURIComponent(`New order from ${customerName} (${customerPhone}): ${itemListString}. Qty: ${totalQuantity}, Total: ₹${totalPrice.toFixed(2)}`);
-        const waUrl = `https://wa.me/${whatsappNumber}?text=${waMessage}`;
-        window.open(waUrl, "_blank");
-      } catch (waErr) {
-        console.warn("WhatsApp redirect failed", waErr);
-      }
-
-      setOrderPlaced(true);
-      setCart([]);
-      setCustomerName("");
-      setCustomerPhone("");
-      setIsCartOpen(false);
-      setIsCheckoutOpen(false);
-    } catch (err: any) {
-      console.error(err);
-      setOrderError(err.message || "Failed to place order. Please try again.");
-    } finally {
-      setIsOrdering(false);
-    }
-  };
-
-
-
   // Calculations
   const filteredDishes = activeCategory === "all" 
     ? menuItems 
@@ -142,6 +135,76 @@ export default function Home() {
     const { price } = getEffectivePrice(item.dish, offers);
     return sum + (price * item.quantity);
   }, 0);
+  const cartDiscount = appliedCoupon ? appliedCoupon.discountAmount : 0;
+  const cartFinalTotal = Math.max(0, cartSubtotal - cartDiscount);
+
+  const handlePlaceOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cart.length === 0) return;
+    setIsOrdering(true);
+    setOrderError("");
+
+    const itemListString = cart.map(item => `${item.quantity}x ${item.dish.name}`).join(", ");
+    const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+    const couponInfo = appliedCoupon ? ` (Coupon ${appliedCoupon.coupon.code}: -₹${cartDiscount.toFixed(2)})` : '';
+    const fullItemsDescription = `${itemListString}${couponInfo}`;
+
+    try {
+      // Save enquiry to localStorage
+      saveEnquiry({
+        id: `enq-${Date.now()}`,
+        customerName,
+        customerPhone,
+        items: fullItemsDescription,
+        totalQuantity,
+        totalPrice: parseFloat(cartFinalTotal.toFixed(2)),
+        createdAt: new Date().toISOString(),
+      });
+
+      // Also save as order for dashboard
+      const localOrder = {
+        id: Math.random().toString(36).substr(2, 9),
+        created_at: new Date().toISOString(),
+        customer_name: customerName,
+        customer_email: customerPhone,
+        product_name: fullItemsDescription,
+        quantity: totalQuantity,
+        price: parseFloat(cartFinalTotal.toFixed(2)),
+        status: "pending"
+      };
+      const existingLocal = JSON.parse(localStorage.getItem("orderflow_orders") || "[]");
+      localStorage.setItem("orderflow_orders", JSON.stringify([localOrder, ...existingLocal]));
+
+      // Open WhatsApp
+      try {
+        const whatsappNumber = "918113021038";
+        const waMessage = encodeURIComponent(
+          `New order from ${customerName} (${customerPhone}): ${itemListString}. Qty: ${totalQuantity}${couponInfo}, Total: ₹${cartFinalTotal.toFixed(2)}`
+        );
+        const waUrl = `https://wa.me/${whatsappNumber}?text=${waMessage}`;
+        window.open(waUrl, "_blank");
+      } catch (waErr) {
+        console.warn("WhatsApp redirect failed", waErr);
+      }
+
+      setOrderPlaced(true);
+      setCart([]);
+      setCustomerName("");
+      setCustomerPhone("");
+      setAppliedCoupon(null);
+      setCouponInput("");
+      setCouponError("");
+      setCouponSuccess("");
+      setIsCartOpen(false);
+      setIsCheckoutOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      setOrderError(err.message || "Failed to place order. Please try again.");
+    } finally {
+      setIsOrdering(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col text-slate-100 relative selection:bg-amber-500 selection:text-slate-900">
@@ -563,11 +626,58 @@ export default function Home() {
 
             {/* Proceed to Checkout Button */}
             {cart.length > 0 && (
-              <div className="border-t border-slate-800 pt-6 mt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-sm font-bold text-slate-400">Total Bill</span>
-                  <span className="text-xl font-extrabold text-amber-500">₹{cartSubtotal.toFixed(2)}</span>
+              <div className="border-t border-slate-800 pt-4 mt-6">
+                {/* Coupon Section */}
+                <div className="mb-4">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Have a Coupon?</label>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">🎟️</span>
+                        <div>
+                          <span className="font-extrabold text-xs text-amber-400 font-mono">{appliedCoupon.coupon.code}</span>
+                          <p className="text-[10px] text-green-400 font-semibold">Saved ₹{appliedCoupon.discountAmount.toFixed(2)}</p>
+                        </div>
+                      </div>
+                      <button onClick={handleRemoveCoupon} className="text-xs text-slate-400 hover:text-red-400 px-2 py-1 rounded hover:bg-red-500/10">
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleApplyCoupon} className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. WELCOME10"
+                        value={couponInput}
+                        onChange={e => setCouponInput(e.target.value.toUpperCase())}
+                        className="px-3 py-2 text-xs font-mono tracking-wider uppercase flex-1 bg-slate-950 border border-slate-800 rounded-xl text-white"
+                      />
+                      <button type="submit" className="px-3 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-smooth">
+                        Apply
+                      </button>
+                    </form>
+                  )}
+                  {couponError && <p className="text-[10px] text-red-400 mt-1.5">{couponError}</p>}
+                  {couponSuccess && <p className="text-[10px] text-green-400 mt-1.5">{couponSuccess}</p>}
                 </div>
+
+                <div className="space-y-1.5 mb-4 border-t border-slate-800/80 pt-3">
+                  <div className="flex justify-between items-center text-xs text-slate-400">
+                    <span>Subtotal</span>
+                    <span>₹{cartSubtotal.toFixed(2)}</span>
+                  </div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between items-center text-xs text-green-400 font-semibold">
+                      <span>Coupon ({appliedCoupon.coupon.code})</span>
+                      <span>-₹{appliedCoupon.discountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-base font-extrabold text-white pt-2 border-t border-slate-800">
+                    <span>Total Bill</span>
+                    <span className="text-amber-500">₹{cartFinalTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+
                 <button 
                   onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }}
                   className="w-full py-3.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold text-sm hover:from-amber-500 hover:to-amber-400 transition-smooth shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
@@ -601,7 +711,7 @@ export default function Home() {
             <p className="text-sm text-slate-400 mb-6">Complete your order details to place via WhatsApp</p>
 
             {/* Order Summary */}
-            <div className="glass rounded-2xl p-4 mb-6 border border-slate-800 max-h-48 overflow-y-auto">
+            <div className="glass rounded-2xl p-4 mb-6 border border-slate-800 max-h-56 overflow-y-auto">
               {cart.map(item => {
                 const priceInfo = getEffectivePrice(item.dish, offers);
                 return (
@@ -611,9 +721,21 @@ export default function Home() {
                   </div>
                 );
               })}
-              <div className="flex justify-between items-center pt-3 mt-2 border-t border-slate-700">
-                <span className="text-sm font-bold text-white">Total</span>
-                <span className="text-lg font-extrabold text-amber-500">₹{cartSubtotal.toFixed(2)}</span>
+              <div className="pt-3 mt-2 border-t border-slate-700 space-y-1.5">
+                <div className="flex justify-between items-center text-xs text-slate-400">
+                  <span>Subtotal</span>
+                  <span>₹{cartSubtotal.toFixed(2)}</span>
+                </div>
+                {appliedCoupon && (
+                  <div className="flex justify-between items-center text-xs text-green-400 font-semibold">
+                    <span>Coupon ({appliedCoupon.coupon.code})</span>
+                    <span>-₹{appliedCoupon.discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                  <span className="text-sm font-bold text-white">Total</span>
+                  <span className="text-lg font-extrabold text-amber-500">₹{cartFinalTotal.toFixed(2)}</span>
+                </div>
               </div>
             </div>
 

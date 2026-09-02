@@ -27,6 +27,18 @@ export interface Offer {
   createdAt: string;
 }
 
+export interface Coupon {
+  id: string;
+  code: string;
+  description?: string;
+  discountType: 'percentage' | 'flat';
+  discountValue: number;
+  minOrderAmount?: number;
+  maxDiscountAmount?: number;
+  active: boolean;
+  createdAt: string;
+}
+
 export interface Enquiry {
   id: string;
   customerName: string;
@@ -250,4 +262,93 @@ export function saveEnquiry(enquiry: Enquiry): void {
     const existing = JSON.parse(localStorage.getItem('orderflow_enquiries') || '[]');
     localStorage.setItem('orderflow_enquiries', JSON.stringify([enquiry, ...existing]));
   } catch {}
+}
+
+export const DEFAULT_COUPONS: Coupon[] = [
+  {
+    id: 'coupon-1',
+    code: 'WELCOME10',
+    description: '10% OFF on all orders',
+    discountType: 'percentage',
+    discountValue: 10,
+    minOrderAmount: 5,
+    maxDiscountAmount: 15,
+    active: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'coupon-2',
+    code: 'ASMAPRO',
+    description: 'Flat ₹2 OFF on minimum order ₹10',
+    discountType: 'flat',
+    discountValue: 2,
+    minOrderAmount: 10,
+    active: true,
+    createdAt: new Date().toISOString(),
+  }
+];
+
+// Helper: load coupons from localStorage, fallback to default coupons
+export function getCoupons(): Coupon[] {
+  if (typeof window === 'undefined') return DEFAULT_COUPONS;
+  try {
+    const stored = localStorage.getItem('orderflow_coupons');
+    if (stored) {
+      const parsed: Coupon[] = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_COUPONS;
+}
+
+// Helper: validate a coupon code and calculate discount
+export function validateCoupon(code: string, cartSubtotal: number): {
+  valid: boolean;
+  message?: string;
+  coupon?: Coupon;
+  discountAmount: number;
+} {
+  const cleanCode = code.trim().toUpperCase();
+  if (!cleanCode) {
+    return { valid: false, message: 'Please enter a coupon code', discountAmount: 0 };
+  }
+
+  const coupons = getCoupons();
+  const coupon = coupons.find(c => c.code.toUpperCase() === cleanCode);
+
+  if (!coupon) {
+    return { valid: false, message: 'Invalid coupon code', discountAmount: 0 };
+  }
+
+  if (!coupon.active) {
+    return { valid: false, message: 'This coupon is expired or inactive', discountAmount: 0 };
+  }
+
+  if (coupon.minOrderAmount && cartSubtotal < coupon.minOrderAmount) {
+    return {
+      valid: false,
+      message: `Minimum order amount of ₹${coupon.minOrderAmount.toFixed(2)} required for code ${coupon.code}`,
+      discountAmount: 0
+    };
+  }
+
+  let discount = 0;
+  if (coupon.discountType === 'percentage') {
+    discount = (cartSubtotal * coupon.discountValue) / 100;
+    if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
+      discount = coupon.maxDiscountAmount;
+    }
+  } else {
+    discount = coupon.discountValue;
+  }
+
+  // Discount cannot exceed subtotal
+  discount = Math.min(discount, cartSubtotal);
+
+  return {
+    valid: true,
+    message: `Coupon ${coupon.code} applied successfully!`,
+    coupon,
+    discountAmount: parseFloat(discount.toFixed(2))
+  };
 }
