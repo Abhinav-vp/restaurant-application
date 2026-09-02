@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { MENU_ITEMS, INITIAL_REVIEWS, MenuItem, Review, Offer, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry } from "@/lib/restaurant-data";
+import { MENU_ITEMS, INITIAL_REVIEWS, BUSINESS_PROFILE, MenuItem, Offer, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry } from "@/lib/restaurant-data";
 import RestaurantProfile from "@/components/RestaurantProfile";
 
 interface CartItem {
@@ -14,15 +14,8 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [reviews, setReviews] = useState<Review[]>(INITIAL_REVIEWS);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(MENU_ITEMS);
   const [offers, setOffers] = useState<Offer[]>([]);
-  
-  // Review Modal State
-  const [isReviewOpen, setIsReviewOpen] = useState(false);
-  const [reviewAuthor, setReviewAuthor] = useState("");
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   
   // Checkout State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -37,10 +30,7 @@ export default function Home() {
     setMenuItems(getMenuItems());
     setOffers(getActiveOffers());
 
-    const savedReviews = localStorage.getItem("abrama_custom_reviews");
-    if (savedReviews) {
-      setReviews([...INITIAL_REVIEWS, ...JSON.parse(savedReviews)]);
-    }
+
 
     // Listen for product/offer updates from admin
     const onUpdate = () => {
@@ -140,29 +130,7 @@ export default function Home() {
     }
   };
 
-  const handleAddReview = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reviewAuthor || !reviewComment) return;
 
-    const newReview: Review = {
-      id: `custom-${Date.now()}`,
-      author: reviewAuthor,
-      comment: reviewComment,
-      rating: reviewRating,
-      date: "Just now"
-    };
-
-    const newReviewsList = [newReview, ...reviews];
-    setReviews(newReviewsList);
-
-    const customOnly = newReviewsList.filter(r => r.id.startsWith("custom-"));
-    localStorage.setItem("abrama_custom_reviews", JSON.stringify(customOnly));
-
-    setReviewAuthor("");
-    setReviewComment("");
-    setReviewRating(5);
-    setIsReviewOpen(false);
-  };
 
   // Calculations
   const filteredDishes = activeCategory === "all" 
@@ -454,81 +422,28 @@ export default function Home() {
                     ))}
                     <span className="text-slate-600">★</span>
                   </div>
-                  <span className="text-xs text-slate-500 font-medium">({reviews.length} reviews)</span>
+                  <span className="text-xs text-slate-500 font-medium">({INITIAL_REVIEWS.length} reviews)</span>
                 </div>
               </div>
               
-              <button 
-                onClick={() => setIsReviewOpen(true)}
-                className="btn-primary text-xs py-2 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent"
-              >
-                Write a Review
-              </button>
+              <div className="flex items-center gap-2">
+                <a 
+                  href={BUSINESS_PROFILE.googleReviewUrl || BUSINESS_PROFILE.googleMapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-primary text-xs py-2 bg-gradient-to-tr from-amber-600 to-amber-500 text-slate-950 font-bold border-transparent flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
+                >
+                  <span>Leave a Google Review</span>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
             </div>
-
-            {/* Review Form */}
-            {isReviewOpen && (
-              <form onSubmit={handleAddReview} className="glass p-6 rounded-2xl border-amber-500/20 mb-8 animate-fadeIn">
-                <h3 className="font-bold text-white text-base mb-4">Post Guest Feedback</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Your Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="e.g. Rahul Murali"
-                      value={reviewAuthor}
-                      onChange={(e) => setReviewAuthor(e.target.value)}
-                      className="px-4 py-2.5 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Item Rating</label>
-                    <select 
-                      value={reviewRating}
-                      onChange={(e) => setReviewRating(Number(e.target.value))}
-                      className="px-4 py-2.5 text-sm"
-                    >
-                      <option value={5}>⭐⭐⭐⭐⭐ (5/5 Excellence)</option>
-                      <option value={4}>⭐⭐⭐⭐ (4/5 Very Good)</option>
-                      <option value={3}>⭐⭐⭐ (3/5 Average)</option>
-                      <option value={2}>⭐⭐ (2/5 Needs Improvement)</option>
-                      <option value={1}>⭐ (1/5 Unsatisfactory)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Your Comment</label>
-                    <textarea 
-                      required
-                      rows={3}
-                      placeholder="What did you order and how was the experience?"
-                      value={reviewComment}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      className="bg-surface-800/50 border border-surface-700 text-surface-100 rounded-xl px-4 py-3 w-full focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 text-sm placeholder:text-surface-500"
-                    />
-                  </div>
-                  <div className="flex gap-3 justify-end pt-2">
-                    <button 
-                      type="button" 
-                      onClick={() => setIsReviewOpen(false)}
-                      className="btn-secondary text-xs px-4 py-2"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="px-4 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-amber-400 transition-smooth"
-                    >
-                      Publish Review
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
 
             {/* Reviews List */}
             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-              {reviews.map((rev) => (
+              {INITIAL_REVIEWS.map((rev) => (
                 <div key={rev.id} className="glass p-5 rounded-2xl border-slate-800 flex flex-col gap-3">
                   <div className="flex justify-between items-center">
                     <div>

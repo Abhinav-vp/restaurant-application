@@ -153,6 +153,7 @@ export interface BusinessProfile {
   photos?: string[];
   mapsEmbedUrl?: string;
   googleMapsUrl?: string;
+  googleReviewUrl?: string;
 }
 
 export const BUSINESS_PROFILE: BusinessProfile = {
@@ -181,7 +182,9 @@ export const BUSINESS_PROFILE: BusinessProfile = {
   mapsEmbedUrl:
     "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3905.3533215286596!2d75.579893!3d11.714206399999996!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ba429f23edab745%3A0x855a37d028d53ecf!2sABR%20ASMA%20RESTAURANT!5e0!3m2!1sen!2sin!4v1714488349281!5m2!1sen!2sin",
   googleMapsUrl:
-    "https://www.google.com/maps/place/ABR+ASMA+RESTAURANT/@11.7142064,75.5820788,17z"
+    "https://www.google.com/maps/place/ABR+ASMA+RESTAURANT/@11.7142064,75.5820788,17z",
+  googleReviewUrl:
+    "https://www.google.com/maps/place/ABR+ASMA+RESTAURANT/@11.714206,75.582079,16z/data=!4m18!1m9!3m8!1s0x3ba429f23edab745:0x855a37d028d53ecf!2sABR+ASMA+RESTAURANT!8m2!3d11.7142064!4d75.5820788!9m1!1b1!16s%2Fg%2F11rjz53ljm!3m7!1s0x3ba429f23edab745:0x855a37d028d53ecf!8m2!3d11.7142064!4d75.5820788!9m1!1b1!16s%2Fg%2F11rjz53ljm?hl=en&entry=ttu&g_ep=EgoyMDI2MDgzMC4wIKXMDSoASAFQAw%3D%3D"
 };
 
 // Helper: load admin-managed menu items from localStorage, fallback to defaults
