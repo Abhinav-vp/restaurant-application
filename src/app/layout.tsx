@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SmoothScroll from "@/components/SmoothScroll";
 
 export const metadata: Metadata = {
   title: "ABR Asma Restaurant — Traditional Taste of Malabar",
@@ -22,6 +23,7 @@ export default function RootLayout({
         />
       </head>
       <body className="gradient-bg min-h-screen font-sans selection:bg-amber-500 selection:text-slate-950">
+        <SmoothScroll />
         {children}
       </body>
     </html>

@@ -1,10 +1,16 @@
 'use client'
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Fire, Star, Ticket, Warning, CheckCircle, House, X } from "@phosphor-icons/react";
 import { MENU_ITEMS, INITIAL_REVIEWS, BUSINESS_PROFILE, MenuItem, Offer, Coupon, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry, validateCoupon, generateOrderId, formatWhatsAppOrderMessage } from "@/lib/restaurant-data";
 import RestaurantProfile from "@/components/RestaurantProfile";
+
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger);
+}
 
 interface CartItem {
   dish: MenuItem;
@@ -17,6 +23,14 @@ export default function Home() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(MENU_ITEMS);
   const [offers, setOffers] = useState<Offer[]>([]);
+
+  // Subtle Scroll Animation Refs
+  const heroRef = useRef<HTMLElement>(null);
+  const heroTextRef = useRef<HTMLDivElement>(null);
+  const heroOfferImgRef = useRef<HTMLDivElement>(null);
+  const heroGlowRef = useRef<HTMLDivElement>(null);
+  const menuSectionRef = useRef<HTMLElement>(null);
+  const reviewsSectionRef = useRef<HTMLElement>(null);
 
   // Coupon State
   const [couponInput, setCouponInput] = useState("");
@@ -159,6 +173,152 @@ export default function Home() {
     }, 4000);
     return () => clearInterval(interval);
   }, [offers.length, isCarouselHovered]);
+
+  // Subtle Bidirectional Scroll Animations
+  useEffect(() => {
+    const isReduced = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (isReduced) return;
+
+    const ctx = gsap.context(() => {
+      // 1. Hero Section Subtle Scroll Parallax & Scale
+      if (heroRef.current) {
+        if (heroTextRef.current) {
+          gsap.to(heroTextRef.current, {
+            y: -35,
+            opacity: 0.25,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: heroRef.current,
+              start: 'top top',
+              end: 'bottom 25%',
+              scrub: 0.5,
+            },
+          });
+        }
+
+        if (heroOfferImgRef.current) {
+          gsap.to(heroOfferImgRef.current, {
+            scale: 1.06,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: heroRef.current,
+              start: 'top top',
+              end: 'bottom 20%',
+              scrub: 0.5,
+            },
+          });
+        }
+
+        if (heroGlowRef.current) {
+          gsap.to(heroGlowRef.current, {
+            y: 60,
+            opacity: 0.3,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: heroRef.current,
+              start: 'top top',
+              end: 'bottom top',
+              scrub: true,
+            },
+          });
+        }
+      }
+
+      // 2. Menu Section Header Reveal (Bidirectional: play reverse play reverse)
+      if (menuSectionRef.current) {
+        gsap.fromTo(
+          '.section-header-reveal',
+          { opacity: 0, y: 25 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.7,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: menuSectionRef.current,
+              start: 'top 85%',
+              toggleActions: 'play reverse play reverse',
+            },
+          }
+        );
+
+        // 3. Existing Food Cards Reveal (Bidirectional)
+        gsap.fromTo(
+          '.food-card-reveal',
+          { opacity: 0, y: 20, scale: 0.96 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.6,
+            stagger: 0.07,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: menuSectionRef.current,
+              start: 'top 75%',
+              toggleActions: 'play reverse play reverse',
+            },
+          }
+        );
+
+        // 4. Food Image Subtle Parallax
+        gsap.utils.toArray<HTMLElement>('.food-img-parallax').forEach((imgEl) => {
+          gsap.fromTo(
+            imgEl,
+            { yPercent: -5 },
+            {
+              yPercent: 5,
+              ease: 'none',
+              scrollTrigger: {
+                trigger: imgEl.closest('.food-card-reveal') || imgEl,
+                start: 'top bottom',
+                end: 'bottom top',
+                scrub: 0.5,
+              },
+            }
+          );
+        });
+      }
+
+      // 5. Reviews Section Reveal (Bidirectional)
+      if (reviewsSectionRef.current) {
+        gsap.fromTo(
+          '.review-card-reveal',
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.5,
+            stagger: 0.08,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: reviewsSectionRef.current,
+              start: 'top 80%',
+              toggleActions: 'play reverse play reverse',
+            },
+          }
+        );
+
+        gsap.fromTo(
+          '#location',
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: '#location',
+              start: 'top 85%',
+              toggleActions: 'play reverse play reverse',
+            },
+          }
+        );
+      }
+    });
+
+    return () => ctx.revert();
+  }, [filteredDishes]);
 
   // Phone Validation Helper
   const validatePhone = (phone: string): { isValid: boolean; message: string } => {
@@ -341,9 +501,9 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <header className="relative flex-1 flex flex-col items-center justify-center px-4 py-14 md:px-6 md:py-24 text-center overflow-hidden">
+      <header ref={heroRef} className="relative flex-1 flex flex-col items-center justify-center px-4 py-14 md:px-6 md:py-24 text-center overflow-hidden">
         {/* Ambient Dark Gourmet Spotlights */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
+        <div ref={heroGlowRef} className="absolute inset-0 z-0 pointer-events-none">
           <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[140px]" />
           <div className="absolute bottom-10 left-1/4 w-[400px] h-[400px] bg-red-600/8 rounded-full blur-[120px]" />
           <div className="absolute top-20 right-1/4 w-[350px] h-[350px] bg-yellow-500/8 rounded-full blur-[100px]" />
@@ -367,7 +527,7 @@ export default function Home() {
                 return (
                   <div key={offer.id} className="flex flex-col sm:flex-row items-center gap-5 md:gap-7 animate-fadeIn text-left">
                     {/* Product Image preview */}
-                    <div className="w-full sm:w-40 md:w-48 h-36 sm:h-36 md:h-40 relative rounded-2xl overflow-hidden bg-slate-950 shrink-0 border border-amber-500/20 shadow-xl group">
+                    <div ref={heroOfferImgRef} className="w-full sm:w-40 md:w-48 h-36 sm:h-36 md:h-40 relative rounded-2xl overflow-hidden bg-slate-950 shrink-0 border border-amber-500/20 shadow-xl group">
                       {imageSrc.startsWith("/") ? (
                         <Image src={imageSrc} alt={offer.title} fill className="object-cover group-hover:scale-105 transition-smooth duration-500" />
                       ) : (
@@ -444,24 +604,26 @@ export default function Home() {
             </div>
           )}
 
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white mb-4 md:mb-6 tracking-tight leading-tight slide-up font-heading">
-            Authentic Taste of <br className="hidden md:inline" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-yellow-500 glow-text-amber">
-              Malabar Culinary Heritage
-            </span>
-          </h1>
+          <div ref={heroTextRef} className="flex flex-col items-center">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black text-white mb-4 md:mb-6 tracking-tight leading-tight slide-up font-heading">
+              Authentic Taste of <br className="hidden md:inline" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-yellow-500 glow-text-amber">
+                Malabar Culinary Heritage
+              </span>
+            </h1>
 
-          <p className="text-sm md:text-lg text-slate-300 max-w-2xl mx-auto mb-9 md:mb-11 fade-in px-2 leading-relaxed font-light">
-            Slow-cooked Thalassery Biriyani, smoked Kuzhimanthi, charred Tandoori grills, and fiery Kerala Beef Fry prepared with traditional spice craft in Peringathur.
-          </p>
+            <p className="text-sm md:text-lg text-slate-300 max-w-2xl mx-auto mb-9 md:mb-11 fade-in px-2 leading-relaxed font-light">
+              Slow-cooked Thalassery Biriyani, smoked Kuzhimanthi, charred Tandoori grills, and fiery Kerala Beef Fry prepared with traditional spice craft in Peringathur.
+            </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 fade-in">
-            <a href="#menu" className="btn-primary text-sm px-8 py-4 uppercase tracking-wider">
-              Explore Our Menu
-            </a>
-            <a href="#location" className="btn-secondary text-sm px-8 py-4 uppercase tracking-wider">
-              Find Restaurant
-            </a>
+            <div className="flex flex-wrap items-center justify-center gap-4 fade-in">
+              <a href="#menu" className="btn-primary text-sm px-8 py-4 uppercase tracking-wider">
+                Explore Our Menu
+              </a>
+              <a href="#location" className="btn-secondary text-sm px-8 py-4 uppercase tracking-wider">
+                Find Restaurant
+              </a>
+            </div>
           </div>
 
           {/* Quick Info Grid - Gourmet Dark Glass Cards */}
@@ -563,10 +725,10 @@ export default function Home() {
       </header>
 
       {/* Menu Section */}
-      <section id="menu" className="py-16 md:py-24 px-4 md:px-12 relative z-10 border-t border-slate-800/60">
+      <section ref={menuSectionRef} id="menu" className="py-16 md:py-24 px-4 md:px-12 relative z-10 border-t border-slate-800/60">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 mb-10 md:mb-14">
+          <div className="section-header-reveal flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 mb-10 md:mb-14">
             <div className="text-left">
               <span className="badge-amber mb-2 inline-block">Chef&apos;s Recommendations</span>
               <h2 className="text-3xl md:text-4xl font-black text-white font-heading">Culinary Delicacies</h2>
@@ -602,7 +764,7 @@ export default function Home() {
               return (
                 <div
                   key={dish.id}
-                  className="glass-card rounded-3xl overflow-hidden hover:scale-[1.02] transition-smooth group flex flex-col border border-slate-800/80 hover:border-amber-500/40 shadow-2xl"
+                  className="food-card-reveal glass-card rounded-3xl overflow-hidden hover:scale-[1.02] transition-smooth group flex flex-col border border-slate-800/80 hover:border-amber-500/40 shadow-2xl"
                 >
                   {/* Image Container */}
                   <div className="h-48 md:h-56 relative w-full overflow-hidden bg-slate-950 flex items-center justify-center border-b border-slate-800/60">
@@ -612,11 +774,11 @@ export default function Home() {
                           src={dish.image}
                           alt={dish.name}
                           fill
-                          className="object-cover group-hover:scale-105 transition-smooth duration-500"
+                          className="food-img-parallax object-cover group-hover:scale-105 transition-smooth duration-500 scale-105"
                         />
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={dish.image} alt={dish.name} className="w-full h-full object-cover group-hover:scale-105 transition-smooth duration-500" />
+                        <img src={dish.image} alt={dish.name} className="food-img-parallax w-full h-full object-cover group-hover:scale-105 transition-smooth duration-500 scale-105" />
                       )
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6 text-center">
@@ -680,7 +842,7 @@ export default function Home() {
       </section>
 
       {/* Info & Reviews Split Section */}
-      <section id="reviews" className="py-16 md:py-24 px-4 md:px-12 relative z-10 border-t border-slate-800/60">
+      <section ref={reviewsSectionRef} id="reviews" className="py-16 md:py-24 px-4 md:px-12 relative z-10 border-t border-slate-800/60">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
           {/* Reviews List */}
           <div className="lg:col-span-7 flex flex-col text-left">
@@ -718,7 +880,7 @@ export default function Home() {
             {/* Reviews List */}
             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-none">
               {INITIAL_REVIEWS.map((rev) => (
-                <div key={rev.id} className="glass-card p-6 rounded-3xl border border-slate-800/80 flex flex-col gap-3">
+                <div key={rev.id} className="review-card-reveal glass-card p-6 rounded-3xl border border-slate-800/80 flex flex-col gap-3">
                   <div className="flex justify-between items-center">
                     <div>
                       <span className="font-black text-base text-white font-heading">{rev.author}</span>
