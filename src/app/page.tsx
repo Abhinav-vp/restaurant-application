@@ -1300,7 +1300,7 @@ export default function Home() {
       )}
 
       {/* Floating WhatsApp & Call Buttons */}
-      <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3 group">
+      <div className={`fixed ${cart.length > 0 && !isCartOpen ? "bottom-24" : "bottom-6"} right-6 z-40 flex flex-col gap-3 group transition-all duration-300`}>
         <a
           href="https://wa.me/918113021038"
           target="_blank"

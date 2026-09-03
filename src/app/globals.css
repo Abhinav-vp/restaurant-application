@@ -208,3 +208,70 @@ input, select, textarea {
 .badge-emerald {
   @apply px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-extrabold uppercase tracking-wider backdrop-blur-md;
 }
+
+/* Floating Action Buttons */
+.fab-whatsapp {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 9999px;
+  background-color: #10b981;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4), 0 8px 10px -6px rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(110, 231, 183, 0.4);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+@media (min-width: 768px) {
+  .fab-whatsapp {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+}
+
+.fab-whatsapp:hover {
+  background-color: #059669;
+  transform: scale(1.1);
+  box-shadow: 0 15px 30px -5px rgba(16, 185, 129, 0.5);
+}
+
+.fab-whatsapp:active {
+  transform: scale(0.95);
+}
+
+.fab-call {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 9999px;
+  background-color: #f59e0b;
+  color: #020617;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.4), 0 8px 10px -6px rgba(245, 158, 11, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+@media (min-width: 768px) {
+  .fab-call {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+}
+
+.fab-call:hover {
+  background-color: #d97706;
+  transform: scale(1.1);
+  box-shadow: 0 15px 30px -5px rgba(245, 158, 11, 0.5);
+}
+
+.fab-call:active {
+  transform: scale(0.95);
+}
