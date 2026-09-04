@@ -6,6 +6,8 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Fire, Star, Ticket, Warning, CheckCircle, House, X } from "@phosphor-icons/react";
 import { MENU_ITEMS, INITIAL_REVIEWS, BUSINESS_PROFILE, MenuItem, Offer, Coupon, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry, validateCoupon, generateOrderId, formatWhatsAppOrderMessage } from "@/lib/restaurant-data";
+import { submitOrderAction } from "@/app/actions/order-actions";
+import { fetchMenuItemsAction, fetchOffersAction } from "@/app/actions/admin-actions";
 import RestaurantProfile from "@/components/RestaurantProfile";
 
 if (typeof window !== "undefined") {
@@ -21,8 +23,8 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(MENU_ITEMS);
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => getMenuItems());
+  const [offers, setOffers] = useState<Offer[]>(() => getActiveOffers());
 
   // Subtle Scroll Animation Refs
   const heroRef = useRef<HTMLElement>(null);
@@ -38,7 +40,7 @@ export default function Home() {
   const [couponError, setCouponError] = useState("");
   const [couponSuccess, setCouponSuccess] = useState("");
 
-  // Checkout State
+  // Checkout Modal State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -50,22 +52,37 @@ export default function Home() {
   const [lastPlacedOrderId, setLastPlacedOrderId] = useState("");
   const [orderError, setOrderError] = useState("");
 
-  // Load menu items, offers, and coupons
+  // Load menu items, offers, and coupons from Supabase
   useEffect(() => {
-    setMenuItems(getMenuItems());
-    setOffers(getActiveOffers());
+    let isMounted = true;
+    async function loadFromSupabase() {
+      try {
+        const [menuRes, offersRes] = await Promise.all([
+          fetchMenuItemsAction(),
+          fetchOffersAction(),
+        ]);
+        if (!isMounted) return;
+        if (menuRes.success && menuRes.data && menuRes.data.length > 0) {
+          setMenuItems(menuRes.data);
+        }
+        if (offersRes.success && offersRes.data) {
+          setOffers(offersRes.data.filter(o => o.active));
+        }
+      } catch (err) {
+        console.warn("Supabase fetch fallback:", err);
+      }
+    }
+
+    loadFromSupabase();
 
     // Listen for product/offer/coupon updates from admin
     const onUpdate = () => {
-      setMenuItems(getMenuItems());
-      setOffers(getActiveOffers());
+      loadFromSupabase();
     };
     window.addEventListener('orderflow_products_updated', onUpdate);
     window.addEventListener('orderflow_coupons_updated', onUpdate);
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'orderflow_menu_items' || e.key === 'orderflow_offers' || e.key === 'orderflow_coupons') onUpdate();
-    });
     return () => {
+      isMounted = false;
       window.removeEventListener('orderflow_products_updated', onUpdate);
       window.removeEventListener('orderflow_coupons_updated', onUpdate);
     };
@@ -380,11 +397,10 @@ export default function Home() {
     });
 
     try {
-      // Save enquiry to localStorage with structured details, orderId, and deliveryAddress
-      saveEnquiry({
-        id: `enq-${Date.now()}`,
+      const orderData = {
+        id: `enq-${orderId}`,
         orderId,
-        status: 'pending',
+        status: 'pending' as const,
         customerName,
         customerPhone,
         deliveryAddress: deliveryAddress.trim(),
@@ -398,23 +414,15 @@ export default function Home() {
         totalQuantity,
         totalPrice: parseFloat(cartFinalTotal.toFixed(2)),
         createdAt: new Date().toISOString(),
+      };
+
+      // Save enquiry directly into Supabase
+      submitOrderAction(orderData).catch(err => {
+        console.error("Supabase order submission error:", err);
       });
 
-      // Also save as order for dashboard
-      const localOrder = {
-        id: orderId,
-        orderId,
-        created_at: new Date().toISOString(),
-        customer_name: customerName,
-        customer_email: customerPhone,
-        delivery_address: deliveryAddress.trim(),
-        product_name: fullItemsDescription,
-        quantity: totalQuantity,
-        price: parseFloat(cartFinalTotal.toFixed(2)),
-        status: "pending"
-      };
-      const existingLocal = JSON.parse(localStorage.getItem("orderflow_orders") || "[]");
-      localStorage.setItem("orderflow_orders", JSON.stringify([localOrder, ...existingLocal]));
+      // Keep local backup
+      saveEnquiry(orderData);
 
       // Open WhatsApp with formatted message
       try {

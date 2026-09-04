@@ -2,14 +2,38 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MenuItem, Offer, Enquiry, Coupon, OrderStatus, ORDER_STATUS_CONFIG, MENU_ITEMS, DEFAULT_COUPONS, updateEnquiryStatus } from "@/lib/restaurant-data";
-import { ForkKnife, NewspaperClipping, Tag, Ticket, LockKey, Upload, CheckCircle, PencilSimple, Trash, MagnifyingGlass, PlayCircle, PauseCircle, Phone, HouseLine, CircleNotch, X, SignOut } from "@phosphor-icons/react";
+import { MenuItem, Offer, Enquiry, Coupon, OrderStatus, ORDER_STATUS_CONFIG, MENU_ITEMS, DEFAULT_COUPONS } from "@/lib/restaurant-data";
+import {
+  fetchMenuItemsAction,
+  createMenuItemAction,
+  updateMenuItemAction,
+  deleteMenuItemAction,
+  fetchEnquiriesAction,
+  updateOrderStatusAction,
+  deleteEnquiryAction,
+  clearAllEnquiriesAction,
+  fetchOffersAction,
+  createOfferAction,
+  updateOfferAction,
+  deleteOfferAction,
+  toggleOfferActiveAction,
+  fetchCouponsAction,
+  createCouponAction,
+  updateCouponAction,
+  deleteCouponAction,
+} from "@/app/actions/admin-actions";
+import { ForkKnife, NewspaperClipping, Tag, Ticket, Upload, CheckCircle, PencilSimple, Trash, MagnifyingGlass, PlayCircle, PauseCircle, Phone, HouseLine, CircleNotch, X, SignOut, CloudCheck, WarningCircle } from "@phosphor-icons/react";
 
 type AdminMenuItem = MenuItem & { id: string };
 
 export default function DashboardClient({ userEmail }: { userEmail: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'menu' | 'enquiries' | 'offers' | 'coupons'>('menu');
+
+  // Supabase sync states
+  const [loading, setLoading] = useState(true);
+  const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Menu Items State
   const [menuItems, setMenuItems] = useState<AdminMenuItem[]>([]);
@@ -41,47 +65,57 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     discountValue: '', minOrderAmount: '', maxDiscountAmount: '', active: true
   });
 
-  // Load data
+  // Load data from Supabase
   useEffect(() => {
-    // Load menu items
-    const stored = localStorage.getItem('orderflow_menu_items');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        setMenuItems(parsed);
-      } else {
-        setMenuItems(MENU_ITEMS);
-        localStorage.setItem('orderflow_menu_items', JSON.stringify(MENU_ITEMS));
+    let isMounted = true;
+    async function loadData() {
+      setLoading(true);
+      setActionError(null);
+      try {
+        const [menuRes, enqRes, offersRes, couponsRes] = await Promise.all([
+          fetchMenuItemsAction(),
+          fetchEnquiriesAction(),
+          fetchOffersAction(),
+          fetchCouponsAction(),
+        ]);
+
+        if (!isMounted) return;
+
+        if (menuRes.success && menuRes.data) {
+          setMenuItems(menuRes.data);
+        } else if (menuRes.error) {
+          console.warn("Supabase menu fetch warning:", menuRes.error);
+        }
+
+        if (enqRes.success && enqRes.data) {
+          setEnquiries(enqRes.data);
+        } else if (enqRes.error) {
+          console.warn("Supabase enquiries fetch warning:", enqRes.error);
+        }
+
+        if (offersRes.success && offersRes.data) {
+          setOffers(offersRes.data);
+        } else if (offersRes.error) {
+          console.warn("Supabase offers fetch warning:", offersRes.error);
+        }
+
+        if (couponsRes.success && couponsRes.data) {
+          setCoupons(couponsRes.data);
+        } else if (couponsRes.error) {
+          console.warn("Supabase coupons fetch warning:", couponsRes.error);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setActionError("Unable to load some data from Supabase. Ensure database tables are created.");
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    } else {
-      setMenuItems(MENU_ITEMS);
-      localStorage.setItem('orderflow_menu_items', JSON.stringify(MENU_ITEMS));
     }
 
-    // Load enquiries
-    const storedEnq = localStorage.getItem('orderflow_enquiries');
-    if (storedEnq) setEnquiries(JSON.parse(storedEnq));
-
-    // Load offers
-    const storedOffers = localStorage.getItem('orderflow_offers');
-    if (storedOffers) setOffers(JSON.parse(storedOffers));
-
-    // Load coupons
-    const storedCoupons = localStorage.getItem('orderflow_coupons');
-    if (storedCoupons) {
-      setCoupons(JSON.parse(storedCoupons));
-    } else {
-      setCoupons(DEFAULT_COUPONS);
-      localStorage.setItem('orderflow_coupons', JSON.stringify(DEFAULT_COUPONS));
-    }
+    loadData();
+    return () => { isMounted = false; };
   }, []);
-
-  // Menu CRUD
-  const saveMenuItems = (items: AdminMenuItem[]) => {
-    setMenuItems(items);
-    localStorage.setItem('orderflow_menu_items', JSON.stringify(items));
-    window.dispatchEvent(new Event('orderflow_products_updated'));
-  };
 
   const resetForm = () => {
     setFormData({ name: '', price: '', category: 'mains', description: '', image: '' });
@@ -89,7 +123,8 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     setEditingItem(null);
   };
 
-  const handleAddItem = () => {
+  // Menu CRUD
+  const handleAddItem = async () => {
     if (!formData.name || !formData.price) return;
     const newItem: AdminMenuItem = {
       id: `admin-${Date.now()}`,
@@ -99,8 +134,19 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       description: formData.description,
       image: formData.image || undefined,
     };
-    saveMenuItems([newItem, ...menuItems]);
+
+    // Optimistic UI update
+    setMenuItems(prev => [newItem, ...prev]);
     resetForm();
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await createMenuItemAction(newItem);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to save menu item to Supabase.');
+      setMenuItems(prev => prev.filter(m => m.id !== newItem.id));
+    }
   };
 
   const handleEditItem = (id: string) => {
@@ -114,39 +160,89 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     setShowAddForm(false);
   };
 
-  const handleUpdateItem = () => {
+  const handleUpdateItem = async () => {
     if (!editingItem || !formData.name || !formData.price) return;
-    const updated = menuItems.map(m => m.id === editingItem ? {
-      ...m, name: formData.name, price: parseFloat(formData.price),
-      category: formData.category, description: formData.description,
-      image: formData.image || undefined
-    } : m);
-    saveMenuItems(updated);
+    const previous = [...menuItems];
+    const updatedFields: Partial<MenuItem> = {
+      name: formData.name,
+      price: parseFloat(formData.price),
+      category: formData.category,
+      description: formData.description,
+      image: formData.image || undefined,
+    };
+
+    setMenuItems(prev => prev.map(m => m.id === editingItem ? { ...m, ...updatedFields } : m));
+    const targetId = editingItem;
     resetForm();
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await updateMenuItemAction(targetId, updatedFields);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to update menu item in Supabase.');
+      setMenuItems(previous);
+    }
   };
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = async (id: string) => {
     if (!confirm('Delete this menu item?')) return;
-    saveMenuItems(menuItems.filter(m => m.id !== id));
+    const previous = [...menuItems];
+    setMenuItems(prev => prev.filter(m => m.id !== id));
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await deleteMenuItemAction(id);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to delete menu item from Supabase.');
+      setMenuItems(previous);
+    }
   };
 
   // Enquiry management
-  const handleDeleteEnquiry = (id: string) => {
-    const updated = enquiries.filter(e => e.id !== id);
-    setEnquiries(updated);
-    localStorage.setItem('orderflow_enquiries', JSON.stringify(updated));
+  const handleDeleteEnquiry = async (id: string) => {
+    const previous = [...enquiries];
+    setEnquiries(prev => prev.filter(e => e.id !== id));
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await deleteEnquiryAction(id);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to delete enquiry from Supabase.');
+      setEnquiries(previous);
+    }
   };
 
-  const handleClearEnquiries = () => {
+  const handleClearEnquiries = async () => {
     if (!confirm('Clear all enquiries?')) return;
+    const previous = [...enquiries];
     setEnquiries([]);
-    localStorage.setItem('orderflow_enquiries', JSON.stringify([]));
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await clearAllEnquiriesAction();
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to clear enquiries in Supabase.');
+      setEnquiries(previous);
+    }
   };
 
   // Status management
-  const handleStatusChange = (enquiryId: string, newStatus: OrderStatus) => {
-    updateEnquiryStatus(enquiryId, newStatus);
+  const handleStatusChange = async (enquiryId: string, newStatus: OrderStatus) => {
+    const previous = [...enquiries];
     setEnquiries(prev => prev.map(e => e.id === enquiryId ? { ...e, status: newStatus } : e));
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await updateOrderStatusAction(enquiryId, newStatus);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to update order status in Supabase.');
+      setEnquiries(previous);
+    }
   };
 
   const filteredEnquiries = statusFilter === 'all'
@@ -154,18 +250,13 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     : enquiries.filter(e => (e.status || 'pending') === statusFilter);
 
   // Offer management
-  const saveOffers = (items: Offer[]) => {
-    setOffers(items);
-    localStorage.setItem('orderflow_offers', JSON.stringify(items));
-  };
-
   const resetOfferForm = () => {
     setOfferForm({ title: '', description: '', discountType: 'percentage', discountValue: '', applicableProducts: [], active: true });
     setShowAddOffer(false);
     setEditingOffer(null);
   };
 
-  const handleAddOffer = () => {
+  const handleAddOffer = async () => {
     if (!offerForm.title || !offerForm.discountValue) return;
     const newOffer: Offer = {
       id: `offer-${Date.now()}`,
@@ -177,8 +268,18 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       active: offerForm.active,
       createdAt: new Date().toISOString(),
     };
-    saveOffers([newOffer, ...offers]);
+
+    setOffers(prev => [newOffer, ...prev]);
     resetOfferForm();
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await createOfferAction(newOffer);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to save offer to Supabase.');
+      setOffers(prev => prev.filter(o => o.id !== newOffer.id));
+    }
   };
 
   const handleEditOffer = (id: string) => {
@@ -193,25 +294,63 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     setShowAddOffer(false);
   };
 
-  const handleUpdateOffer = () => {
+  const handleUpdateOffer = async () => {
     if (!editingOffer || !offerForm.title || !offerForm.discountValue) return;
-    const updated = offers.map(o => o.id === editingOffer ? {
-      ...o, title: offerForm.title, description: offerForm.description,
-      discountType: offerForm.discountType, discountValue: parseFloat(offerForm.discountValue),
-      applicableProducts: offerForm.applicableProducts, active: offerForm.active
-    } : o);
-    saveOffers(updated);
+    const previous = [...offers];
+    const updatedOffer: Partial<Offer> = {
+      title: offerForm.title,
+      description: offerForm.description,
+      discountType: offerForm.discountType,
+      discountValue: parseFloat(offerForm.discountValue),
+      applicableProducts: offerForm.applicableProducts,
+      active: offerForm.active,
+    };
+
+    setOffers(prev => prev.map(o => o.id === editingOffer ? { ...o, ...updatedOffer } : o));
+    const targetId = editingOffer;
     resetOfferForm();
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await updateOfferAction(targetId, updatedOffer);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to update offer in Supabase.');
+      setOffers(previous);
+    }
   };
 
-  const handleDeleteOffer = (id: string) => {
+  const handleDeleteOffer = async (id: string) => {
     if (!confirm('Delete this offer?')) return;
-    saveOffers(offers.filter(o => o.id !== id));
+    const previous = [...offers];
+    setOffers(prev => prev.filter(o => o.id !== id));
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await deleteOfferAction(id);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to delete offer from Supabase.');
+      setOffers(previous);
+    }
   };
 
-  const toggleOfferActive = (id: string) => {
-    const updated = offers.map(o => o.id === id ? { ...o, active: !o.active } : o);
-    saveOffers(updated);
+  const toggleOfferActive = async (id: string) => {
+    const target = offers.find(o => o.id === id);
+    if (!target) return;
+    const newActive = !target.active;
+    const previous = [...offers];
+
+    setOffers(prev => prev.map(o => o.id === id ? { ...o, active: newActive } : o));
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await toggleOfferActiveAction(id, newActive);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to toggle offer in Supabase.');
+      setOffers(previous);
+    }
   };
 
   const handleToggleProduct = (productId: string) => {
@@ -224,12 +363,6 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
   };
 
   // Coupon management
-  const saveCoupons = (items: Coupon[]) => {
-    setCoupons(items);
-    localStorage.setItem('orderflow_coupons', JSON.stringify(items));
-    window.dispatchEvent(new Event('orderflow_coupons_updated'));
-  };
-
   const resetCouponForm = () => {
     setCouponForm({
       code: '', description: '', discountType: 'percentage', discountValue: '',
@@ -239,7 +372,7 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     setEditingCoupon(null);
   };
 
-  const handleAddCoupon = () => {
+  const handleAddCoupon = async () => {
     if (!couponForm.code || !couponForm.discountValue) return;
     const newCoupon: Coupon = {
       id: `coupon-${Date.now()}`,
@@ -252,8 +385,18 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       active: couponForm.active,
       createdAt: new Date().toISOString(),
     };
-    saveCoupons([newCoupon, ...coupons]);
+
+    setCoupons(prev => [newCoupon, ...prev]);
     resetCouponForm();
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await createCouponAction(newCoupon);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to save coupon to Supabase.');
+      setCoupons(prev => prev.filter(c => c.id !== newCoupon.id));
+    }
   };
 
   const handleEditCoupon = (id: string) => {
@@ -272,10 +415,10 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     setShowAddCoupon(false);
   };
 
-  const handleUpdateCoupon = () => {
+  const handleUpdateCoupon = async () => {
     if (!editingCoupon || !couponForm.code || !couponForm.discountValue) return;
-    const updated = coupons.map(c => c.id === editingCoupon ? {
-      ...c,
+    const previous = [...coupons];
+    const updatedFields: Partial<Coupon> = {
       code: couponForm.code.trim().toUpperCase(),
       description: couponForm.description,
       discountType: couponForm.discountType,
@@ -283,19 +426,53 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       minOrderAmount: couponForm.minOrderAmount ? parseFloat(couponForm.minOrderAmount) : undefined,
       maxDiscountAmount: couponForm.maxDiscountAmount ? parseFloat(couponForm.maxDiscountAmount) : undefined,
       active: couponForm.active
-    } : c);
-    saveCoupons(updated);
+    };
+
+    setCoupons(prev => prev.map(c => c.id === editingCoupon ? { ...c, ...updatedFields } : c));
+    const targetId = editingCoupon;
     resetCouponForm();
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await updateCouponAction(targetId, updatedFields);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to update coupon in Supabase.');
+      setCoupons(previous);
+    }
   };
 
-  const handleDeleteCoupon = (id: string) => {
+  const handleDeleteCoupon = async (id: string) => {
     if (!confirm('Delete this coupon code?')) return;
-    saveCoupons(coupons.filter(c => c.id !== id));
+    const previous = [...coupons];
+    setCoupons(prev => prev.filter(c => c.id !== id));
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await deleteCouponAction(id);
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to delete coupon from Supabase.');
+      setCoupons(previous);
+    }
   };
 
-  const toggleCouponActive = (id: string) => {
-    const updated = coupons.map(c => c.id === id ? { ...c, active: !c.active } : c);
-    saveCoupons(updated);
+  const toggleCouponActive = async (id: string) => {
+    const target = coupons.find(c => c.id === id);
+    if (!target) return;
+    const newActive = !target.active;
+    const previous = [...coupons];
+
+    setCoupons(prev => prev.map(c => c.id === id ? { ...c, active: newActive } : c));
+    setActionPending(true);
+    setActionError(null);
+
+    const res = await updateCouponAction(id, { active: newActive });
+    setActionPending(false);
+    if (!res.success) {
+      setActionError(res.error || 'Failed to toggle coupon in Supabase.');
+      setCoupons(previous);
+    }
   };
 
   const handleLogout = async () => {
@@ -362,6 +539,16 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
           </div>
         </div>
         <div className="flex items-center gap-4">
+          {actionPending && (
+            <span className="flex items-center gap-1.5 text-xs text-amber-400 font-medium animate-pulse">
+              <CircleNotch className="w-3.5 h-3.5 animate-spin" /> Syncing...
+            </span>
+          )}
+          {!actionPending && (
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2.5 py-1 rounded-full">
+              <CloudCheck className="w-3.5 h-3.5" weight="bold" /> Supabase
+            </span>
+          )}
           <span className="text-xs text-slate-400 hidden md:inline">Signed in as <span className="text-amber-400 font-bold">{userEmail || 'admin'}</span></span>
           <button onClick={handleLogout} className="btn-secondary text-xs px-4 py-2 flex items-center gap-2">
             <SignOut className="w-4 h-4" weight="bold" />
@@ -390,6 +577,29 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
           </button>
         ))}
       </div>
+
+      {actionError && (
+        <div className="max-w-6xl mx-auto px-6 pt-4">
+          <div className="bg-red-950/70 border border-red-800/60 rounded-xl p-3.5 flex items-center justify-between text-red-200 text-xs">
+            <div className="flex items-center gap-2">
+              <WarningCircle className="w-4 h-4 text-red-400 shrink-0" weight="bold" />
+              <span>{actionError}</span>
+            </div>
+            <button onClick={() => setActionError(null)} className="text-red-400 hover:text-white ml-3">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="max-w-6xl mx-auto p-12 text-center">
+          <div className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl glass border border-amber-500/20 text-amber-400 text-sm font-semibold">
+            <CircleNotch className="w-5 h-5 animate-spin" />
+            Loading details from Supabase...
+          </div>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto p-6">
         {/* ====== MENU ITEMS TAB ====== */}

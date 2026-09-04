@@ -5,6 +5,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Fire, Warning, CheckCircle, House, X } from "@phosphor-icons/react";
 import { MENU_ITEMS, MenuItem, Offer, getMenuItems, getActiveOffers, getEffectivePrice, saveEnquiry, generateOrderId, formatWhatsAppOrderMessage } from "@/lib/restaurant-data";
+import { submitOrderAction } from "@/app/actions/order-actions";
+import { fetchMenuItemsAction, fetchOffersAction } from "@/app/actions/admin-actions";
 
 export default function MenuPage() {
   const [cart, setCart] = useState<{ dish: MenuItem; quantity: number }[]>([]);
@@ -24,26 +26,39 @@ export default function MenuPage() {
   const [orderError, setOrderError] = useState("");
 
   React.useEffect(() => {
-    const loadProducts = () => {
-      setProdLoading(true);
+    let isMounted = true;
+    const loadProducts = async () => {
+      // Instant render
       setProducts(getMenuItems());
       setOffers(getActiveOffers());
-      setProdLoading(false);
+
+      try {
+        const [menuRes, offersRes] = await Promise.all([
+          fetchMenuItemsAction(),
+          fetchOffersAction(),
+        ]);
+        if (!isMounted) return;
+        if (menuRes.success && menuRes.data && menuRes.data.length > 0) {
+          setProducts(menuRes.data);
+        }
+        if (offersRes.success && offersRes.data) {
+          setOffers(offersRes.data.filter(o => o.active));
+        }
+      } catch (err) {
+        console.warn("Menu fetch from Supabase fallback:", err);
+      } finally {
+        if (isMounted) setProdLoading(false);
+      }
     };
 
     loadProducts();
 
     const onProductsUpdated = () => loadProducts();
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "orderflow_menu_items" || e.key === "orderflow_offers") loadProducts();
-    };
-
     window.addEventListener("orderflow_products_updated", onProductsUpdated);
-    window.addEventListener("storage", onStorage);
 
     return () => {
+      isMounted = false;
       window.removeEventListener("orderflow_products_updated", onProductsUpdated);
-      window.removeEventListener("storage", onStorage);
     };
   }, []);
 
@@ -120,37 +135,29 @@ export default function MenuPage() {
         return { name: c.dish.name, quantity: c.quantity, unitPrice: p.price };
       });
 
-      // Save enquiry
-      saveEnquiry({
-        id: `enq-${Date.now()}`,
+      const orderData = {
+        id: `enq-${orderId}`,
         orderId,
-        status: 'pending',
+        status: 'pending' as const,
         customerName,
         customerPhone,
         deliveryAddress: deliveryAddress.trim(),
         deliveryLandmark: deliveryLandmark.trim() || undefined,
         deliveryNotes: deliveryNotes.trim() || undefined,
         items: itemList,
+        itemDetails: cartItems.map(i => ({ ...i, lineTotal: i.quantity * i.unitPrice })),
         totalQuantity: totalQty,
         totalPrice,
         createdAt: new Date().toISOString(),
+      };
+
+      // Save enquiry directly to Supabase
+      submitOrderAction(orderData).catch(err => {
+        console.error("Supabase order submission error:", err);
       });
 
-      // Save order
-      const localOrder = {
-        id: orderId,
-        orderId,
-        created_at: new Date().toISOString(),
-        customer_name: customerName,
-        customer_email: customerPhone,
-        delivery_address: deliveryAddress.trim(),
-        product_name: itemList,
-        quantity: totalQty,
-        price: totalPrice,
-        status: "pending"
-      };
-      const existing = JSON.parse(localStorage.getItem("orderflow_orders") || "[]");
-      localStorage.setItem("orderflow_orders", JSON.stringify([localOrder, ...existing]));
+      // Local backup
+      saveEnquiry(orderData);
 
       // Open WhatsApp
       try {
