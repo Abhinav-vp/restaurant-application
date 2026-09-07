@@ -1310,7 +1310,7 @@ export default function Home() {
       {/* Floating WhatsApp & Call Buttons */}
       <div className={`fixed ${cart.length > 0 && !isCartOpen ? "bottom-24" : "bottom-6"} right-6 z-40 flex flex-col gap-3 group transition-all duration-300`}>
         <a
-          href="https://wa.me/918113021038"
+          href="https://wa.me/918113021038?text=Hi%20ABR%20Asma%20Restaurant%2C%20I%20would%20like%20to%20know%20more%20about%20your%20menu."
           target="_blank"
           rel="noopener noreferrer"
           className="fab-whatsapp"
