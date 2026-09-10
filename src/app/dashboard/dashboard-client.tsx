@@ -72,6 +72,8 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
   const [latestOrderNotification, setLatestOrderNotification] = useState<Enquiry | null>(null);
   const processedOrderIds = useRef<Set<string>>(new Set());
   const audioEnabledRef = useRef<boolean>(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     try {
@@ -86,52 +88,110 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     audioEnabledRef.current = audioEnabled;
   }, [audioEnabled]);
 
-  // Play audio alarm helper with Web Audio API synthesizer fallback
-  const playOrderChime = useCallback(() => {
-    try {
-      const audio = new Audio('/sounds/new-order.mp3');
-      audio.volume = 1.0;
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // Web Audio API synthesizer fallback
-          try {
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-            if (AudioContextClass) {
-              const ctx = new AudioContextClass();
-              const playTone = (freq: number, start: number, duration: number) => {
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-                gain.gain.setValueAtTime(0.35, ctx.currentTime + start);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.start(ctx.currentTime + start);
-                osc.stop(ctx.currentTime + start + duration);
-              };
-              playTone(587.33, 0, 0.5);   // D5
-              playTone(880.0, 0.18, 0.7);  // A5
-              playTone(1174.66, 0.35, 0.9); // D6
-            }
-          } catch { }
-        });
-      }
-    } catch { }
+  // Preload audio asset on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const audio = new Audio('/sounds/mixkit-short-chime-sound-2023.wav');
+        audio.preload = 'auto';
+        audioRef.current = audio;
+      } catch { }
+    }
   }, []);
 
-  // Unlock audio on interaction
+  // Unlock audio on interaction by initializing and resuming AudioContext
   const unlockAudio = useCallback(() => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.load();
+      } else if (typeof window !== 'undefined') {
+        const audio = new Audio('/sounds/mixkit-short-chime-sound-2023.wav');
+        audio.preload = 'auto';
+        audio.load();
+        audioRef.current = audio;
+      }
+
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+          audioContextRef.current = new AudioContextClass();
+        }
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+      }
+    } catch (err) {
+      console.warn('Audio unlock warning:', err);
+    }
+  }, []);
+
+  // Listen for user interaction on window to unlock audio context if alerts are enabled
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      unlockAudio();
+    };
+
+    window.addEventListener('click', handleUserInteraction, { capture: true, once: true });
+    window.addEventListener('keydown', handleUserInteraction, { capture: true, once: true });
+    window.addEventListener('touchstart', handleUserInteraction, { capture: true, once: true });
+
+    return () => {
+      window.removeEventListener('click', handleUserInteraction, { capture: true });
+      window.removeEventListener('keydown', handleUserInteraction, { capture: true });
+      window.removeEventListener('touchstart', handleUserInteraction, { capture: true });
+    };
+  }, [unlockAudio]);
+
+  // Play audio alarm helper with Web Audio API synthesizer fallback
+  const playOrderChime = useCallback(async () => {
+    // 1. Primary: HTML5 Audio playback
+    try {
+      if (!audioRef.current && typeof window !== 'undefined') {
+        audioRef.current = new Audio('/sounds/mixkit-short-chime-sound-2023.wav');
+        audioRef.current.preload = 'auto';
+      }
+      if (audioRef.current) {
+        audioRef.current.volume = 1.0;
+        audioRef.current.currentTime = 0;
+        await audioRef.current.play();
+        return;
+      }
+    } catch (html5Err) {
+      console.warn('HTML5 Audio playback prevented, attempting Web Audio synthesizer fallback:', html5Err);
+    }
+
+    // 2. Web Audio API synthesizer fallback
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass) {
-        const ctx = new AudioContextClass();
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+          audioContextRef.current = new AudioContextClass();
+        }
+        const ctx = audioContextRef.current;
         if (ctx.state === 'suspended') {
-          ctx.resume();
+          await ctx.resume();
+        }
+        if (ctx.state === 'running') {
+          const playTone = (freq: number, start: number, duration: number) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+            gain.gain.setValueAtTime(0.35, ctx.currentTime + start);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + start);
+            osc.stop(ctx.currentTime + start + duration);
+          };
+          playTone(587.33, 0, 0.5);   // D5
+          playTone(880.0, 0.18, 0.7);  // A5
+          playTone(1174.66, 0.35, 0.9); // D6
         }
       }
-    } catch { }
+    } catch (synthErr) {
+      console.warn('Unable to play order alarm:', synthErr);
+    }
   }, []);
 
   const toggleAudioAlerts = () => {
