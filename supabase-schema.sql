@@ -97,6 +97,13 @@ DROP POLICY IF EXISTS "Full access for coupons" ON public.coupons;
 CREATE POLICY "Full access for coupons" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
 
 -- ==============================================================================
+-- SUPABASE REALTIME CONFIGURATION
+-- ==============================================================================
+
+-- Enable Realtime publication for incoming orders (enquiries table)
+ALTER PUBLICATION supabase_realtime ADD TABLE public.enquiries;
+
+-- ==============================================================================
 -- INITIAL SEED DATA (Default Menu Items & Coupons)
 -- ==============================================================================
 

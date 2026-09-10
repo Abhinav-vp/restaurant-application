@@ -1,8 +1,9 @@
 "use client"
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { MenuItem, Offer, Enquiry, Coupon, OrderStatus, ORDER_STATUS_CONFIG, MENU_ITEMS, DEFAULT_COUPONS } from "@/lib/restaurant-data";
+import { createClient } from "@/lib/supabase/client";
 import {
   fetchMenuItemsAction,
   createMenuItemAction,
@@ -22,7 +23,7 @@ import {
   updateCouponAction,
   deleteCouponAction,
 } from "@/app/actions/admin-actions";
-import { ForkKnife, NewspaperClipping, Tag, Ticket, Upload, CheckCircle, PencilSimple, Trash, MagnifyingGlass, PlayCircle, PauseCircle, Phone, HouseLine, CircleNotch, X, SignOut, CloudCheck, WarningCircle } from "@phosphor-icons/react";
+import { ForkKnife, NewspaperClipping, Tag, Ticket, Upload, CheckCircle, PencilSimple, Trash, MagnifyingGlass, PlayCircle, PauseCircle, Phone, HouseLine, CircleNotch, X, SignOut, CloudCheck, WarningCircle, BellRinging, SpeakerHigh, SpeakerSlash } from "@phosphor-icons/react";
 
 type AdminMenuItem = MenuItem & { id: string };
 
@@ -65,6 +66,117 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     discountValue: '', minOrderAmount: '', maxDiscountAmount: '', active: true
   });
 
+  // Realtime & Audio Alarm States
+  const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error' | 'disconnected'>('connecting');
+  const [latestOrderNotification, setLatestOrderNotification] = useState<Enquiry | null>(null);
+  const processedOrderIds = useRef<Set<string>>(new Set());
+  const audioEnabledRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('admin_alerts_enabled');
+      if (stored === 'true') {
+        setAudioEnabled(true);
+      }
+    } catch { }
+  }, []);
+
+  useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
+  }, [audioEnabled]);
+
+  // Play audio alarm helper with Web Audio API synthesizer fallback
+  const playOrderChime = useCallback(() => {
+    try {
+      const audio = new Audio('/sounds/new-order.mp3');
+      audio.volume = 1.0;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Web Audio API synthesizer fallback
+          try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContextClass) {
+              const ctx = new AudioContextClass();
+              const playTone = (freq: number, start: number, duration: number) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+                gain.gain.setValueAtTime(0.35, ctx.currentTime + start);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(ctx.currentTime + start);
+                osc.stop(ctx.currentTime + start + duration);
+              };
+              playTone(587.33, 0, 0.5);   // D5
+              playTone(880.0, 0.18, 0.7);  // A5
+              playTone(1174.66, 0.35, 0.9); // D6
+            }
+          } catch { }
+        });
+      }
+    } catch { }
+  }, []);
+
+  // Unlock audio on interaction
+  const unlockAudio = useCallback(() => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+      }
+    } catch { }
+  }, []);
+
+  const toggleAudioAlerts = () => {
+    const nextState = !audioEnabled;
+    setAudioEnabled(nextState);
+    try {
+      localStorage.setItem('admin_alerts_enabled', nextState ? 'true' : 'false');
+    } catch { }
+    if (nextState) {
+      unlockAudio();
+      playOrderChime();
+    }
+  };
+
+  // Helper: map Supabase row payload to Enquiry object
+  const mapRowToEnquiry = useCallback((row: any): Enquiry => {
+    return {
+      id: row.id || `enq-${Date.now()}`,
+      orderId: row.order_id || row.orderId || `ORD-${Date.now()}`,
+      status: (row.status as OrderStatus) || 'pending',
+      customerName: row.customer_name || row.customerName || 'Customer',
+      customerPhone: row.customer_phone || row.customerPhone || '',
+      deliveryAddress: row.delivery_address || row.deliveryAddress || undefined,
+      deliveryLandmark: row.delivery_landmark || row.deliveryLandmark || undefined,
+      deliveryNotes: row.delivery_notes || row.deliveryNotes || undefined,
+      items: row.items || 'Order items',
+      itemDetails: row.item_details || row.itemDetails || undefined,
+      couponCode: row.coupon_code || row.couponCode || undefined,
+      couponDiscount: row.coupon_discount ? Number(row.coupon_discount) : undefined,
+      subtotalPrice: row.subtotal_price ? Number(row.subtotal_price) : undefined,
+      totalQuantity: row.total_quantity || 1,
+      totalPrice: Number(row.total_price || 0),
+      createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+    };
+  }, []);
+
+  // Auto-dismiss new-order notification toast after 15 seconds
+  useEffect(() => {
+    if (!latestOrderNotification) return;
+    const timer = setTimeout(() => {
+      setLatestOrderNotification(null);
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [latestOrderNotification]);
+
   // Load data from Supabase
   useEffect(() => {
     let isMounted = true;
@@ -89,6 +201,11 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
 
         if (enqRes.success && enqRes.data) {
           setEnquiries(enqRes.data);
+          // Register existing orders so initial fetch never triggers new-order alarm
+          enqRes.data.forEach((e) => {
+            if (e.id) processedOrderIds.current.add(e.id);
+            if (e.orderId) processedOrderIds.current.add(e.orderId);
+          });
         } else if (enqRes.error) {
           console.warn("Supabase enquiries fetch warning:", enqRes.error);
         }
@@ -116,6 +233,75 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     loadData();
     return () => { isMounted = false; };
   }, []);
+
+  // Supabase Realtime Subscription for new incoming orders
+  useEffect(() => {
+    const supabase = createClient();
+
+    const handleNewOrderPayload = (payload: any) => {
+      if (!payload || !payload.new) return;
+      const newEnquiry = mapRowToEnquiry(payload.new);
+      const uniqueKey = newEnquiry.id || newEnquiry.orderId;
+
+      // Prevent processing duplicate events or existing loaded orders
+      if (uniqueKey && processedOrderIds.current.has(uniqueKey)) {
+        return;
+      }
+      if (uniqueKey) {
+        processedOrderIds.current.add(uniqueKey);
+      }
+
+      // Prepend the new order to existing list without duplicates
+      setEnquiries((prev) => {
+        const alreadyInList = prev.some(
+          (item) => item.id === newEnquiry.id || (newEnquiry.orderId && item.orderId === newEnquiry.orderId)
+        );
+        if (alreadyInList) return prev;
+        return [newEnquiry, ...prev];
+      });
+
+      // Trigger floating order notification
+      setLatestOrderNotification(newEnquiry);
+
+      // Play alarm chime if audio enabled
+      if (audioEnabledRef.current) {
+        playOrderChime();
+      }
+    };
+
+    const channel = supabase
+      .channel('admin-new-orders')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'enquiries',
+        },
+        handleNewOrderPayload
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'orders',
+        },
+        handleNewOrderPayload
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeStatus('disconnected');
+          if (err) console.warn('Supabase Realtime subscription status:', status, err);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [mapRowToEnquiry, playOrderChime]);
 
   const resetForm = () => {
     setFormData({ name: '', price: '', category: 'mains', description: '', image: '' });
@@ -538,7 +724,7 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
             <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mt-0.5">ABR Asma Restaurant</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {actionPending && (
             <span className="flex items-center gap-1.5 text-xs text-amber-400 font-medium animate-pulse">
               <CircleNotch className="w-3.5 h-3.5 animate-spin" /> Syncing...
@@ -546,9 +732,32 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
           )}
           {!actionPending && (
             <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2.5 py-1 rounded-full">
+              <span className={`w-1.5 h-1.5 rounded-full ${realtimeStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
               <CloudCheck className="w-3.5 h-3.5" weight="bold" /> Supabase
             </span>
           )}
+          <button
+            type="button"
+            onClick={toggleAudioAlerts}
+            title={audioEnabled ? "Order sound alarms are active. Click to mute." : "Click to enable order sound alarms"}
+            className={`text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold transition-smooth border ${
+              audioEnabled
+                ? "bg-amber-500/15 border-amber-500/40 text-amber-400 hover:bg-amber-500/25"
+                : "glass border-slate-800 text-slate-400 hover:text-white"
+            }`}
+          >
+            {audioEnabled ? (
+              <>
+                <SpeakerHigh className="w-3.5 h-3.5 text-amber-400 animate-pulse" weight="bold" />
+                <span className="hidden sm:inline">Alerts On</span>
+              </>
+            ) : (
+              <>
+                <SpeakerSlash className="w-3.5 h-3.5 text-slate-400" weight="bold" />
+                <span className="hidden sm:inline">Enable Alerts</span>
+              </>
+            )}
+          </button>
           <span className="text-xs text-slate-400 hidden md:inline">Signed in as <span className="text-amber-400 font-bold">{userEmail || 'admin'}</span></span>
           <button onClick={handleLogout} className="btn-secondary text-xs px-4 py-2 flex items-center gap-2">
             <SignOut className="w-4 h-4" weight="bold" />
@@ -1179,6 +1388,59 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
           </div>
         )}
       </div>
+
+      {/* Realtime New Order Notification Toast Banner */}
+      {latestOrderNotification && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="fixed top-20 right-6 z-50 max-w-sm w-[calc(100%-3rem)] bg-slate-900/95 border border-amber-500/60 shadow-2xl shadow-amber-500/10 rounded-2xl p-4 backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-300"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center flex-shrink-0 text-amber-400">
+              <BellRinging className="w-5 h-5 animate-bounce" weight="fill" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400">New Order Received!</span>
+                <span className="text-[10px] text-slate-500 font-mono">Just now</span>
+              </div>
+              <p className="text-sm font-bold text-white truncate mt-0.5">{latestOrderNotification.orderId || 'Order'}</p>
+              <p className="text-xs text-slate-300 mt-0.5 truncate">
+                {latestOrderNotification.customerName} • <span className="text-amber-400 font-semibold">₹{latestOrderNotification.totalPrice.toFixed(2)}</span>
+              </p>
+              <p className="text-[11px] text-slate-400 truncate mt-1">{latestOrderNotification.items}</p>
+              <div className="flex items-center gap-2 mt-3 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('enquiries');
+                    setLatestOrderNotification(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-smooth"
+                >
+                  View Order
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLatestOrderNotification(null)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-smooth"
+                >
+                  Acknowledge
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLatestOrderNotification(null)}
+              className="text-slate-500 hover:text-white transition-colors p-1"
+              aria-label="Close notification"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
