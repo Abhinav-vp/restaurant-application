@@ -137,6 +137,8 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
 
   // Play audio alarm helper with Web Audio API synthesizer fallback
   const playOrderChime = useCallback(async () => {
+    console.log("[ALARM] playOrderChime() called");
+
     // 1. Primary: HTML5 Audio playback
     try {
       if (!audioRef.current && typeof window !== 'undefined') {
@@ -146,11 +148,12 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       if (audioRef.current) {
         audioRef.current.volume = 1;
         audioRef.current.currentTime = 0;
+        console.log("[ALARM] Playing /sounds/new-order.mp3");
         await audioRef.current.play();
         return;
       }
     } catch (error) {
-      console.warn('Alarm playback failed:', error);
+      console.error("[ALARM] Audio playback failed:", error);
     }
 
     // 2. Fallback: Web Audio API synthesizer
@@ -182,12 +185,12 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
             playTone(880.0, 0.18, 0.7);  // A5
             playTone(1174.66, 0.35, 0.9); // D6
           } else {
-            console.warn('AudioContext is suspended');
+            console.warn('[ALARM] AudioContext is suspended');
           }
         }
       }
     } catch (synthErr) {
-      console.error('Order alarm playback failed:', synthErr);
+      console.error('[ALARM] Audio playback failed:', synthErr);
     }
   }, []);
 
@@ -293,12 +296,15 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     return () => { isMounted = false; };
   }, []);
 
-  // Supabase Realtime Subscription for new incoming orders
+  // Supabase Realtime Subscription for incoming customer enquiries / orders
   useEffect(() => {
     const supabase = createClient();
 
-    const handleNewOrderPayload = (payload: any) => {
+    const handleNewEnquiry = async (payload: any) => {
       if (!payload || !payload.new) return;
+
+      console.log("[REALTIME] NEW ENQUIRY / ORDER RECEIVED:", payload.new);
+
       const newEnquiry = mapRowToEnquiry(payload.new);
       const uniqueKey = newEnquiry.id || newEnquiry.orderId;
 
@@ -310,10 +316,10 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
         processedOrderIds.current.add(uniqueKey);
       }
 
-      // Prepend the new order to existing list without duplicates
+      // Prepend the new order/enquiry to existing list without duplicates
       setEnquiries((prev) => {
         const alreadyInList = prev.some(
-          (item) => item.id === newEnquiry.id || (newEnquiry.orderId && item.orderId === newEnquiry.orderId)
+          (item) => item.id === newEnquiry.id || (Boolean(newEnquiry.orderId) && item.orderId === newEnquiry.orderId)
         );
         if (alreadyInList) return prev;
         return [newEnquiry, ...prev];
@@ -322,16 +328,29 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       // Trigger floating order notification
       setLatestOrderNotification(newEnquiry);
 
+      console.log("[ALARM] New order received. Audio enabled:", audioEnabledRef.current);
+
       // Play alarm chime if audio enabled
       if (audioEnabledRef.current) {
-        playOrderChime().catch((err) => {
-          console.error('Order alarm playback failed:', err);
-        });
+        try {
+          await playOrderChime();
+        } catch (err) {
+          console.error("[ALARM] Audio playback failed:", err);
+        }
       }
     };
 
     const channel = supabase
-      .channel('admin-new-orders')
+      .channel('admin-new-enquiries')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'enquiries',
+        },
+        handleNewEnquiry
+      )
       .on(
         'postgres_changes',
         {
@@ -339,9 +358,10 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
           schema: 'public',
           table: 'orders',
         },
-        handleNewOrderPayload
+        handleNewEnquiry
       )
       .subscribe((status, err) => {
+        console.log("[REALTIME] enquiries subscription:", status);
         if (status === 'SUBSCRIBED') {
           setRealtimeStatus('connected');
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
@@ -354,46 +374,6 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       supabase.removeChannel(channel);
     };
   }, [mapRowToEnquiry, playOrderChime]);
-
-  // Supabase Realtime Subscription for incoming customer enquiries
-  useEffect(() => {
-    const supabase = createClient();
-
-    const channel = supabase
-      .channel('admin-enquiries-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'enquiries',
-        },
-        (payload) => {
-          if (!payload || !payload.new) return;
-          const newEnquiry = mapRowToEnquiry(payload.new);
-
-          // Duplicate prevention using existing enquiry ID
-          setEnquiries((prev) => {
-            const alreadyExists = prev.some(
-              (item) => item.id === newEnquiry.id || (Boolean(newEnquiry.orderId) && item.orderId === newEnquiry.orderId)
-            );
-            if (alreadyExists) return prev;
-            return [newEnquiry, ...prev];
-          });
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === 'SUBSCRIBED') {
-          setRealtimeStatus('connected');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          if (err) console.warn('Supabase enquiries realtime subscription warning:', status, err);
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [mapRowToEnquiry]);
 
   const resetForm = () => {
     setFormData({ name: '', price: '', category: 'mains', description: '', image: '' });
