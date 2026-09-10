@@ -92,7 +92,7 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        const audio = new Audio('/sounds/mixkit-short-chime-sound-2023.wav');
+        const audio = new Audio('/sounds/new-order.mp3');
         audio.preload = 'auto';
         audioRef.current = audio;
       } catch { }
@@ -105,7 +105,7 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       if (audioRef.current) {
         audioRef.current.load();
       } else if (typeof window !== 'undefined') {
-        const audio = new Audio('/sounds/mixkit-short-chime-sound-2023.wav');
+        const audio = new Audio('/sounds/new-order.mp3');
         audio.preload = 'auto';
         audio.load();
         audioRef.current = audio;
@@ -147,7 +147,7 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     // 1. Primary: HTML5 Audio playback
     try {
       if (!audioRef.current && typeof window !== 'undefined') {
-        audioRef.current = new Audio('/sounds/mixkit-short-chime-sound-2023.wav');
+        audioRef.current = new Audio('/sounds/new-order.mp3');
         audioRef.current.preload = 'auto';
       }
       if (audioRef.current) {
