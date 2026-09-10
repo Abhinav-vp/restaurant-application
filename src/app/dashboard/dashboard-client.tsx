@@ -88,7 +88,7 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     audioEnabledRef.current = audioEnabled;
   }, [audioEnabled]);
 
-  // Preload audio asset on mount
+  // Preload audio asset on mount without creating AudioContext
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -99,48 +99,41 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
     }
   }, []);
 
-  // Unlock audio on interaction by initializing and resuming AudioContext
-  const unlockAudio = useCallback(() => {
+  // Unlock audio and AudioContext as a direct result of user interaction
+  const unlockAudio = useCallback(async (): Promise<boolean> => {
     try {
-      if (audioRef.current) {
-        audioRef.current.load();
-      } else if (typeof window !== 'undefined') {
+      // 1. Prime HTML5 Audio element
+      if (!audioRef.current && typeof window !== 'undefined') {
         const audio = new Audio('/sounds/new-order.mp3');
         audio.preload = 'auto';
-        audio.load();
         audioRef.current = audio;
       }
+      if (audioRef.current) {
+        audioRef.current.load();
+      }
 
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-          audioContextRef.current = new AudioContextClass();
-        }
-        if (audioContextRef.current.state === 'suspended') {
-          audioContextRef.current.resume();
+      // 2. Initialize and resume Web Audio AudioContext only inside user gesture
+      if (typeof window !== 'undefined') {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+            audioContextRef.current = new AudioContextClass();
+          }
+          if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+          }
+          if (audioContextRef.current.state !== 'running') {
+            console.warn('AudioContext is suspended');
+          }
+          return audioContextRef.current.state === 'running';
         }
       }
-    } catch (err) {
-      console.warn('Audio unlock warning:', err);
+      return true;
+    } catch (error) {
+      console.error('Audio unlock failed:', error);
+      return false;
     }
   }, []);
-
-  // Listen for user interaction on window to unlock audio context if alerts are enabled
-  useEffect(() => {
-    const handleUserInteraction = () => {
-      unlockAudio();
-    };
-
-    window.addEventListener('click', handleUserInteraction, { capture: true, once: true });
-    window.addEventListener('keydown', handleUserInteraction, { capture: true, once: true });
-    window.addEventListener('touchstart', handleUserInteraction, { capture: true, once: true });
-
-    return () => {
-      window.removeEventListener('click', handleUserInteraction, { capture: true });
-      window.removeEventListener('keydown', handleUserInteraction, { capture: true });
-      window.removeEventListener('touchstart', handleUserInteraction, { capture: true });
-    };
-  }, [unlockAudio]);
 
   // Play audio alarm helper with Web Audio API synthesizer fallback
   const playOrderChime = useCallback(async () => {
@@ -151,58 +144,64 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
         audioRef.current.preload = 'auto';
       }
       if (audioRef.current) {
-        audioRef.current.volume = 1.0;
+        audioRef.current.volume = 1;
         audioRef.current.currentTime = 0;
         await audioRef.current.play();
         return;
       }
-    } catch (html5Err) {
-      console.warn('HTML5 Audio playback prevented, attempting Web Audio synthesizer fallback:', html5Err);
+    } catch (error) {
+      console.warn('Alarm playback failed:', error);
     }
 
-    // 2. Web Audio API synthesizer fallback
+    // 2. Fallback: Web Audio API synthesizer
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-          audioContextRef.current = new AudioContextClass();
-        }
-        const ctx = audioContextRef.current;
-        if (ctx.state === 'suspended') {
-          await ctx.resume();
-        }
-        if (ctx.state === 'running') {
-          const playTone = (freq: number, start: number, duration: number) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-            gain.gain.setValueAtTime(0.35, ctx.currentTime + start);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(ctx.currentTime + start);
-            osc.stop(ctx.currentTime + start + duration);
-          };
-          playTone(587.33, 0, 0.5);   // D5
-          playTone(880.0, 0.18, 0.7);  // A5
-          playTone(1174.66, 0.35, 0.9); // D6
+      if (typeof window !== 'undefined') {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+            audioContextRef.current = new AudioContextClass();
+          }
+          const ctx = audioContextRef.current;
+          if (ctx.state === 'suspended') {
+            await ctx.resume();
+          }
+          if (ctx.state === 'running') {
+            const playTone = (freq: number, start: number, duration: number) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+              gain.gain.setValueAtTime(0.35, ctx.currentTime + start);
+              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(ctx.currentTime + start);
+              osc.stop(ctx.currentTime + start + duration);
+            };
+            playTone(587.33, 0, 0.5);   // D5
+            playTone(880.0, 0.18, 0.7);  // A5
+            playTone(1174.66, 0.35, 0.9); // D6
+          } else {
+            console.warn('AudioContext is suspended');
+          }
         }
       }
     } catch (synthErr) {
-      console.warn('Unable to play order alarm:', synthErr);
+      console.error('Order alarm playback failed:', synthErr);
     }
   }, []);
 
-  const toggleAudioAlerts = () => {
+  const toggleAudioAlerts = async () => {
     const nextState = !audioEnabled;
     setAudioEnabled(nextState);
     try {
       localStorage.setItem('admin_alerts_enabled', nextState ? 'true' : 'false');
     } catch { }
     if (nextState) {
-      unlockAudio();
-      playOrderChime();
+      const unlocked = await unlockAudio();
+      if (unlocked) {
+        await playOrderChime();
+      }
     }
   };
 
@@ -325,7 +324,9 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
 
       // Play alarm chime if audio enabled
       if (audioEnabledRef.current) {
-        playOrderChime();
+        playOrderChime().catch((err) => {
+          console.error('Order alarm playback failed:', err);
+        });
       }
     };
 
