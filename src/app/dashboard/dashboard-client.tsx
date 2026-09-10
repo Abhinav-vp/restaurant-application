@@ -276,15 +276,6 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'enquiries',
-        },
-        handleNewOrderPayload
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
           table: 'orders',
         },
         handleNewOrderPayload
@@ -302,6 +293,46 @@ export default function DashboardClient({ userEmail }: { userEmail: string }) {
       supabase.removeChannel(channel);
     };
   }, [mapRowToEnquiry, playOrderChime]);
+
+  // Supabase Realtime Subscription for incoming customer enquiries
+  useEffect(() => {
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel('admin-enquiries-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'enquiries',
+        },
+        (payload) => {
+          if (!payload || !payload.new) return;
+          const newEnquiry = mapRowToEnquiry(payload.new);
+
+          // Duplicate prevention using existing enquiry ID
+          setEnquiries((prev) => {
+            const alreadyExists = prev.some(
+              (item) => item.id === newEnquiry.id || (Boolean(newEnquiry.orderId) && item.orderId === newEnquiry.orderId)
+            );
+            if (alreadyExists) return prev;
+            return [newEnquiry, ...prev];
+          });
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (err) console.warn('Supabase enquiries realtime subscription warning:', status, err);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [mapRowToEnquiry]);
 
   const resetForm = () => {
     setFormData({ name: '', price: '', category: 'mains', description: '', image: '' });
